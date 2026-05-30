@@ -12,7 +12,10 @@
       "bundleIdentifier": "com.ktbatterham.certwatch",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
-        "UIBackgroundModes": ["fetch", "remote-notification"]
+        "UIBackgroundModes": [
+          "fetch",
+          "remote-notification"
+        ]
       }
     },
     "android": {
@@ -50,6 +53,12 @@
     "experiments": {
       "typedRoutes": true
     },
-    "owner": "ktbatterham"
+    "owner": "ktbatterham",
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "c3bebdb0-d820-4a3c-b974-0d69a66c19fa"
+      }
+    }
   }
 }
