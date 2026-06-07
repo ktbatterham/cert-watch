@@ -9,6 +9,7 @@ import { colors, spacing, typography, radius } from '../../src/theme';
 import { ExpiryBadge } from '../../src/components/ExpiryBadge';
 import { useWatches } from '../../src/hooks/useWatches';
 import * as BackgroundFetch from 'expo-background-fetch';
+import * as TaskManager from 'expo-task-manager';
 import { BACKGROUND_FETCH_TASK } from '../../src/tasks/background';
 import type { CertWatch } from '../../src/types';
 
@@ -20,14 +21,18 @@ export default function WatchesScreen() {
 
   const init = useCallback(async () => {
     await load();
-    const status = await BackgroundFetch.getStatusAsync();
-    const isRegistered = await BackgroundFetch.isTaskRegisteredAsync(BACKGROUND_FETCH_TASK);
-    if (status === BackgroundFetch.BackgroundFetchStatus.Available && isRegistered) {
-      setBgStatus('active');
-    } else if (status === BackgroundFetch.BackgroundFetchStatus.Available) {
-      setBgStatus('pending');
-    } else {
-      setBgStatus('unavailable');
+    try {
+      const status = await BackgroundFetch.getStatusAsync();
+      const isRegistered = await TaskManager.isTaskRegisteredAsync(BACKGROUND_FETCH_TASK);
+      if (status === BackgroundFetch.BackgroundFetchStatus.Available && isRegistered) {
+        setBgStatus('active');
+      } else if (status === BackgroundFetch.BackgroundFetchStatus.Available) {
+        setBgStatus('pending');
+      } else {
+        setBgStatus('unavailable');
+      }
+    } catch {
+      // BackgroundFetch not available in Expo Go
     }
   }, [load]);
 
