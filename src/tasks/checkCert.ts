@@ -4,6 +4,15 @@ import type { CertWatch, CertEvent, CertInfo } from '../types';
 
 const EXPIRY_WARN_DAYS = [30, 14, 7, 1];
 
+// The tightest warning band a cert with `days` remaining has entered, or null if
+// it's still outside the widest band. Used instead of exact-day matching so a
+// background check that skips the precise threshold day (e.g. 8 -> 6 never lands
+// on 7) still surfaces a warning.
+export function warningBand(days: number): number | null {
+  const crossed = EXPIRY_WARN_DAYS.filter((t) => days <= t);
+  return crossed.length ? Math.min(...crossed) : null;
+}
+
 export async function fetchCertInfo(domain: string): Promise<CertInfo> {
   const url = `https://crt.sh/?identity=${encodeURIComponent(domain)}&output=json`;
   const res = await fetch(url, { signal: AbortSignal.timeout(15000) });
@@ -81,6 +90,7 @@ export async function checkCert(watch: CertWatch): Promise<CertEvent | null> {
     return event;
   }
 
+  const prevWarned = watch.lastWarnedThreshold ?? null;
   const updated: CertWatch = {
     ...watch,
     lastCheckedAt: new Date().toISOString(),
@@ -89,6 +99,7 @@ export async function checkCert(watch: CertWatch): Promise<CertEvent | null> {
     certIssuer: certInfo.issuer,
     daysUntilExpiry: certInfo.daysUntilExpiry,
     hasAlert: false,
+    lastWarnedThreshold: prevWarned,
   };
 
   let event: CertEvent | null = null;
@@ -111,6 +122,8 @@ export async function checkCert(watch: CertWatch): Promise<CertEvent | null> {
       newExpiry: certInfo.expiry,
     };
     updated.hasAlert = eventType !== 'renewed';
+    // New cert in place — clear the warning band so it re-arms for this cert.
+    if (eventType === 'renewed') updated.lastWarnedThreshold = null;
   } else if (certInfo.daysUntilExpiry <= 0) {
     event = {
       id: `${Date.now()}-${watch.id}`,
@@ -127,22 +140,29 @@ export async function checkCert(watch: CertWatch): Promise<CertEvent | null> {
       newExpiry: certInfo.expiry,
     };
     updated.hasAlert = true;
-  } else if (EXPIRY_WARN_DAYS.includes(certInfo.daysUntilExpiry)) {
-    event = {
-      id: `${Date.now()}-${watch.id}`,
-      watchId: watch.id,
-      domain: watch.domain,
-      detectedAt: new Date().toISOString(),
-      eventType: 'expiring_soon',
-      daysUntilExpiry: certInfo.daysUntilExpiry,
-      oldSerial: watch.certSerial,
-      newSerial: certInfo.serial,
-      oldIssuer: watch.certIssuer,
-      newIssuer: certInfo.issuer,
-      oldExpiry: watch.certExpiry,
-      newExpiry: certInfo.expiry,
-    };
-    updated.hasAlert = true;
+  } else {
+    // Expiring soon: alert when the cert has entered a tighter warning band than
+    // we've already alerted on for this cert. Crossing-based (not exact-day) so a
+    // skipped background check can't slip past a threshold silently.
+    const band = warningBand(certInfo.daysUntilExpiry);
+    if (band !== null && (prevWarned === null || band < prevWarned)) {
+      event = {
+        id: `${Date.now()}-${watch.id}`,
+        watchId: watch.id,
+        domain: watch.domain,
+        detectedAt: new Date().toISOString(),
+        eventType: 'expiring_soon',
+        daysUntilExpiry: certInfo.daysUntilExpiry,
+        oldSerial: watch.certSerial,
+        newSerial: certInfo.serial,
+        oldIssuer: watch.certIssuer,
+        newIssuer: certInfo.issuer,
+        oldExpiry: watch.certExpiry,
+        newExpiry: certInfo.expiry,
+      };
+      updated.hasAlert = true;
+      updated.lastWarnedThreshold = band;
+    }
   }
 
   await updateWatch(updated);

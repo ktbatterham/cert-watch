@@ -9,6 +9,11 @@ export interface CertWatch {
   daysUntilExpiry: number | null;
   hasAlert: boolean;
   checkIntervalHours: 1 | 6 | 24;
+  // Tightest expiry-warning band (in days) we've already alerted on for the
+  // current certificate, so repeat checks don't re-alert and skipped days still
+  // fire once. Reset to null when the cert is renewed. Optional for watches
+  // persisted before this field existed.
+  lastWarnedThreshold?: number | null;
 }
 
 export type CertEventType =

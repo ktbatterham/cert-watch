@@ -7,7 +7,7 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing, typography, radius } from '../src/theme';
 import { ExpiryBadge } from '../src/components/ExpiryBadge';
-import { fetchCertInfo } from '../src/tasks/checkCert';
+import { fetchCertInfo, warningBand } from '../src/tasks/checkCert';
 import { useWatches } from '../src/hooks/useWatches';
 import type { CertWatch, CertInfo } from '../src/types';
 
@@ -53,6 +53,9 @@ export default function AddScreen() {
       daysUntilExpiry: certInfo.daysUntilExpiry,
       hasAlert: false,
       checkIntervalHours: 24,
+      // Seed with the band the cert is already in, so we don't re-alert the
+      // status the user just saw here — only a tighter band triggers a warning.
+      lastWarnedThreshold: warningBand(certInfo.daysUntilExpiry),
     };
     await add(watch);
     router.back();
