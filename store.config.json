@@ -18,7 +18,7 @@
           "devops",
           "web"
         ],
-        "releaseNotes": "Bug fixes and performance improvements.",
+        "releaseNotes": "• More reliable certificate-expiry alerts and background checks\n• New: discover the rest of the SecURL suite from inside the app",
         "privacyPolicyUrl": "https://securl.online/privacy",
         "supportUrl": "https://securl.online/support"
       }
