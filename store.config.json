@@ -1,0 +1,27 @@
+{
+  "configVersion": 0,
+  "apple": {
+    "info": {
+      "en-US": {
+        "title": "Cert Watch",
+        "subtitle": "TLS certificate expiry alerts",
+        "description": "Cert Watch monitors the TLS certificates of any domains you care about and sends push notifications before they expire — or immediately if the issuer changes.\n\nAdd a domain and Cert Watch checks the certificate silently in the background. You get alerted at 30, 14, 7, and 1 day before expiry so you never get blindsided by a lapsed cert. If the certificate issuer changes unexpectedly — a sign of a misconfiguration or something worse — you get an immediate alert.\n\nCert Watch uses crt.sh for certificate lookups. Everything runs on device. No account required, no backend, no tracking.\n\nBuilt for developers, sysadmins, and security engineers who want passive, always-on visibility into their certificate estate without standing up monitoring infrastructure.\n\n──\n\nPart of the SecURL suite — passive external security monitoring for the web.\n\n• Header Watch (free) — monitor security header drift and get alerted the moment a header changes, goes missing, or drops grade.\n• SecURL (free, securl.online) — full external security posture scan: headers, TLS, DNS/email trust, third-party surface, and a scored grade from A+ to F.",
+        "keywords": [
+          "ssl",
+          "tls",
+          "certificate",
+          "expiry",
+          "monitor",
+          "security",
+          "alert",
+          "https",
+          "devops",
+          "web"
+        ],
+        "releaseNotes": "Bug fixes and performance improvements.",
+        "privacyPolicyUrl": "https://securl.online/privacy",
+        "supportUrl": "https://securl.online/support"
+      }
+    }
+  }
+}
