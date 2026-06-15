@@ -1,15 +1,15 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { CertWatch } from '../types';
 
-const KEY = 'cw:watches_v1';
+const STORAGE_NAMESPACE = 'cw:watches_v1';
 
 export async function loadWatches(): Promise<CertWatch[]> {
-  const raw = await AsyncStorage.getItem(KEY);
+  const raw = await AsyncStorage.getItem(STORAGE_NAMESPACE);
   return raw ? JSON.parse(raw) : [];
 }
 
 export async function saveWatches(watches: CertWatch[]): Promise<void> {
-  await AsyncStorage.setItem(KEY, JSON.stringify(watches));
+  await AsyncStorage.setItem(STORAGE_NAMESPACE, JSON.stringify(watches));
 }
 
 export async function addWatch(watch: CertWatch): Promise<void> {
