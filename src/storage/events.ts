@@ -1,15 +1,15 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { CertEvent } from '../types';
 
-const KEY = 'cw:events_v1';
+const STORAGE_NAMESPACE = 'cw:events_v1';
 
 export async function loadEvents(): Promise<CertEvent[]> {
-  const raw = await AsyncStorage.getItem(KEY);
+  const raw = await AsyncStorage.getItem(STORAGE_NAMESPACE);
   return raw ? JSON.parse(raw) : [];
 }
 
 export async function saveEvents(events: CertEvent[]): Promise<void> {
-  await AsyncStorage.setItem(KEY, JSON.stringify(events));
+  await AsyncStorage.setItem(STORAGE_NAMESPACE, JSON.stringify(events));
 }
 
 export async function addEvent(event: CertEvent): Promise<void> {
