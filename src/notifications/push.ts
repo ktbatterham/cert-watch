@@ -10,37 +10,11 @@
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { getOwnerToken } from '../api/client';
 
 const BASE_URL = 'https://securl-app-production.up.railway.app';
 const APP_ID = 'com.ktbatterham.certwatch'; // becomes the apns-topic server-side
-const OWNER_TOKEN_KEY = 'cw:scan-owner-token';
 const REGISTERED_TOKEN_KEY = 'cw:registered-apns-token';
-
-// Stable anonymous identifier the backend uses to scope this device's
-// registration (>= 24 chars, decent entropy). Not a secret.
-let cachedOwner: string | null = null;
-
-async function getOwnerToken(): Promise<string> {
-  if (cachedOwner) return cachedOwner;
-  try {
-    const stored = await AsyncStorage.getItem(OWNER_TOKEN_KEY);
-    if (stored) {
-      cachedOwner = stored;
-      return stored;
-    }
-  } catch {
-    // fall through and mint a session-only token
-  }
-  const seg = Array.from({ length: 4 }, () => Math.random().toString(36).slice(2));
-  const token = `cw-${Date.now().toString(36)}-${seg.join('')}`.slice(0, 120);
-  cachedOwner = token;
-  try {
-    await AsyncStorage.setItem(OWNER_TOKEN_KEY, token);
-  } catch {
-    // non-fatal
-  }
-  return token;
-}
 
 /**
  * Fetch the device's native APNs token and register it with the backend.

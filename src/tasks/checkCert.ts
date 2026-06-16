@@ -1,5 +1,6 @@
 import { loadWatches, updateWatch } from '../storage/watches';
 import { addEvent } from '../storage/events';
+import { fetchLiveCertInfo } from '../api/client';
 import type { CertWatch, CertEvent, CertInfo } from '../types';
 
 const EXPIRY_WARN_DAYS = [30, 14, 7, 1];
@@ -13,7 +14,24 @@ export function warningBand(days: number): number | null {
   return crossed.length ? Math.min(...crossed) : null;
 }
 
+// Serials can come from two sources in different cases/separators (crt.sh is
+// lowercase hex; the live endpoint is uppercase). Normalise before comparing so
+// switching source doesn't look like a renewal.
+export function normalizeSerial(serial: string | null): string | null {
+  if (!serial) return serial;
+  const hex = serial.replace(/[^0-9a-fA-F]/g, '').toUpperCase();
+  return hex || serial;
+}
+
+// Authoritative served cert via the SecURL backend, falling back to crt.sh's CT
+// logs when the backend is unavailable.
 export async function fetchCertInfo(domain: string): Promise<CertInfo> {
+  const live = await fetchLiveCertInfo(domain);
+  if (live) return live;
+  return fetchCertInfoFromCrtSh(domain);
+}
+
+async function fetchCertInfoFromCrtSh(domain: string): Promise<CertInfo> {
   const url = `https://crt.sh/?identity=${encodeURIComponent(domain)}&output=json`;
   const res = await fetch(url, { signal: AbortSignal.timeout(15000) });
   if (!res.ok) throw new Error(`crt.sh returned ${res.status}`);
@@ -105,7 +123,7 @@ export async function checkCert(watch: CertWatch): Promise<CertEvent | null> {
   let event: CertEvent | null = null;
 
   // Certificate renewed or replaced
-  if (watch.certSerial && watch.certSerial !== certInfo.serial) {
+  if (watch.certSerial && normalizeSerial(watch.certSerial) !== normalizeSerial(certInfo.serial)) {
     const eventType = certInfo.daysUntilExpiry <= 0 ? 'expired' : 'renewed';
     event = {
       id: `${Date.now()}-${watch.id}`,
