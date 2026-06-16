@@ -3,12 +3,17 @@ import { useEffect } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import '../src/tasks/background';
 import { requestNotificationPermissions } from '../src/notifications';
+import { registerForRemotePush } from '../src/notifications/push';
 import { registerBackgroundFetch } from '../src/tasks/background';
 
 export default function RootLayout() {
   useEffect(() => {
-    requestNotificationPermissions();
-    registerBackgroundFetch();
+    (async () => {
+      await requestNotificationPermissions();
+      registerBackgroundFetch();
+      // Register this device's APNs token so the backend can push cert alerts.
+      registerForRemotePush().catch(() => {});
+    })();
   }, []);
 
   return (
