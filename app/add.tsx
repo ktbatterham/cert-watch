@@ -10,6 +10,7 @@ import { ExpiryBadge } from '../src/components/ExpiryBadge';
 import { EcosystemCard } from '../src/components/EcosystemCard';
 import { fetchCertInfo, warningBand } from '../src/tasks/checkCert';
 import { useWatches } from '../src/hooks/useWatches';
+import { haptics } from '../src/haptics';
 import type { CertWatch, CertInfo } from '../src/types';
 
 type Stage = 'input' | 'scanning' | 'confirm';
@@ -34,7 +35,9 @@ export default function AddScreen() {
       const info = await fetchCertInfo(clean);
       setCertInfo(info);
       setStage('confirm');
+      haptics.light();
     } catch (e: any) {
+      haptics.error();
       setStage('input');
       Alert.alert('Scan failed', e.message ?? 'Could not retrieve certificate data.');
     }
@@ -57,6 +60,7 @@ export default function AddScreen() {
       lastWarnedThreshold: warningBand(certInfo.daysUntilExpiry),
     };
     await add(watch);
+    haptics.success();
     router.back();
   };
 
