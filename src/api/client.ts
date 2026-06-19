@@ -13,6 +13,7 @@ import type { CertInfo } from '../types';
 
 const BASE_URL = 'https://securl-app-production.up.railway.app';
 const OWNER_TOKEN_KEY = 'cw:scan-owner-token';
+const APP_ID = 'com.ktbatterham.certwatch'; // becomes the apns-topic server-side
 
 // Stable anonymous identifier the backend uses to scope requests (>= 24 chars,
 // decent entropy). Not a secret. Shared with the push module via the same key.
@@ -83,5 +84,43 @@ export async function fetchLiveCertInfo(domain: string): Promise<CertInfo | null
     };
   } catch {
     return null;
+  }
+}
+
+/**
+ * Register a domain as a backend cert-monitoring target so the server checks the
+ * served certificate daily and pushes expiry/renewal/issuer events via APNs —
+ * reliable even when the app is closed (unlike the throttled on-device fetch).
+ * Best-effort: returns the target id, or null on any failure (the local checker
+ * still runs). Idempotent on the backend per (owner, host, kind).
+ */
+export async function createCertMonitoringTarget(domain: string): Promise<string | null> {
+  try {
+    const owner = await getOwnerToken();
+    const res = await fetch(`${BASE_URL}/api/monitoring-targets`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Scan-Owner': owner },
+      body: JSON.stringify({ url: `https://${domain}`, kind: 'cert', cadence: 'daily', appId: APP_ID }),
+      signal: AbortSignal.timeout(15000),
+    });
+    if (!res.ok) return null;
+    const data = (await res.json()) as { target?: { id?: string } };
+    return data.target?.id ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/** Stop server-side monitoring for a target. Best-effort. */
+export async function deleteMonitoringTarget(id: string): Promise<void> {
+  try {
+    const owner = await getOwnerToken();
+    await fetch(`${BASE_URL}/api/monitoring-targets/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+      headers: { 'X-Scan-Owner': owner },
+      signal: AbortSignal.timeout(15000),
+    });
+  } catch {
+    // Best-effort.
   }
 }
