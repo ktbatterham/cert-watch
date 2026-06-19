@@ -1,7 +1,7 @@
 import React, { useState, useCallback } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity,
-  StyleSheet, ActivityIndicator, Alert,
+  StyleSheet, ActivityIndicator, Alert, RefreshControl,
 } from 'react-native';
 import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -9,11 +9,14 @@ import { colors, spacing, typography, radius, expiryColor } from '../../src/them
 import { ExpiryBadge } from '../../src/components/ExpiryBadge';
 import { SectionCard } from '../../src/components/SectionCard';
 import { CertEventRow } from '../../src/components/CertEventRow';
+import { ServerTimeline } from '../../src/components/ServerTimeline';
 import { loadWatches, updateWatch } from '../../src/storage/watches';
 import { getEventsForWatch } from '../../src/storage/events';
 import { useWatches } from '../../src/hooks/useWatches';
 import { useChecker } from '../../src/hooks/useChecker';
 import { scheduleCertNotification } from '../../src/notifications';
+import { fetchCertTargetHistory, type CertHistoryEntry } from '../../src/api/client';
+import { haptics } from '../../src/haptics';
 import type { CertWatch, CertEvent } from '../../src/types';
 
 export default function WatchDetailScreen() {
@@ -24,7 +27,9 @@ export default function WatchDetailScreen() {
 
   const [watch, setWatch] = useState<CertWatch | null>(null);
   const [events, setEvents] = useState<CertEvent[]>([]);
+  const [serverHistory, setServerHistory] = useState<CertHistoryEntry[]>([]);
   const [checking, setChecking] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
   const load = useCallback(async () => {
     if (!id) return;
@@ -36,19 +41,34 @@ export default function WatchDetailScreen() {
     setEvents(evts.sort((a, b) =>
       new Date(b.detectedAt).getTime() - new Date(a.detectedAt).getTime(),
     ));
+    // Pull the backend's authoritative monitoring timeline (best-effort).
+    if (w.serverTargetId) {
+      setServerHistory(await fetchCertTargetHistory(w.serverTargetId));
+    }
     if (w.hasAlert) await clearAlert(id);
   }, [id, clearAlert]);
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    await load();
+    setRefreshing(false);
+  };
+
   const handleCheckNow = async () => {
     if (!watch) return;
+    haptics.light();
     setChecking(true);
     try {
       const { event } = await check(watch);
-      if (event) await scheduleCertNotification(event);
+      if (event) {
+        haptics.warning();
+        await scheduleCertNotification(event);
+      }
       await load();
     } catch (e: any) {
+      haptics.error();
       Alert.alert('Check failed', e.message ?? 'Could not retrieve certificate data.');
     } finally {
       setChecking(false);
@@ -57,6 +77,7 @@ export default function WatchDetailScreen() {
 
   const handleDelete = () => {
     if (!watch) return;
+    haptics.medium();
     Alert.alert(
       'Remove watch',
       `Stop watching ${watch.domain}?`,
@@ -86,7 +107,17 @@ export default function WatchDetailScreen() {
   const daysLeft = expiryMs !== null ? Math.ceil(expiryMs / 86_400_000) : null;
 
   return (
-    <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
+    <ScrollView
+      style={styles.screen}
+      contentContainerStyle={styles.content}
+      refreshControl={
+        <RefreshControl
+          refreshing={refreshing}
+          onRefresh={handleRefresh}
+          tintColor={colors.accentLight}
+        />
+      }
+    >
 
       {/* Hero */}
       <SectionCard style={styles.hero}>
@@ -145,11 +176,19 @@ export default function WatchDetailScreen() {
         </View>
       )}
 
-      {/* Events */}
+      {/* Server monitoring timeline */}
+      {watch.serverTargetId && (
+        <View>
+          <Text style={styles.sectionLabel}>Monitoring timeline</Text>
+          <ServerTimeline entries={serverHistory} />
+        </View>
+      )}
+
+      {/* On-device events */}
       {events.length > 0 && (
         <View>
           <Text style={styles.sectionLabel}>
-            Event history ({events.length})
+            On-device events ({events.length})
           </Text>
           <SectionCard style={{ padding: 0 }}>
             {events.map((event) => (

@@ -111,6 +111,44 @@ export async function createCertMonitoringTarget(domain: string): Promise<string
   }
 }
 
+export interface CertHistoryEntry {
+  checkedAt: string;
+  eventType: string | null; // null = routine check, no change
+  daysRemaining: number | null;
+  serialNumber: string | null;
+  issuer: string | null;
+  validTo: string | null;
+  reachable: boolean;
+}
+
+interface TargetHistoryResponse {
+  target?: { cert?: { history?: CertHistoryEntry[] } };
+}
+
+/**
+ * Fetch the backend's authoritative monitoring timeline for a cert target —
+ * every check it has run, with the event (if any) it detected. This is the
+ * server's record across all the days the app was closed, unlike the on-device
+ * event log. Newest first. Returns [] on any failure.
+ */
+export async function fetchCertTargetHistory(targetId: string): Promise<CertHistoryEntry[]> {
+  try {
+    const owner = await getOwnerToken();
+    const res = await fetch(
+      `${BASE_URL}/api/monitoring-targets/${encodeURIComponent(targetId)}/history`,
+      { headers: { 'X-Scan-Owner': owner }, signal: AbortSignal.timeout(15000) },
+    );
+    if (!res.ok) return [];
+    const data = (await res.json()) as TargetHistoryResponse;
+    const history = data.target?.cert?.history ?? [];
+    return [...history].sort(
+      (a, b) => new Date(b.checkedAt).getTime() - new Date(a.checkedAt).getTime(),
+    );
+  } catch {
+    return [];
+  }
+}
+
 /** Stop server-side monitoring for a target. Best-effort. */
 export async function deleteMonitoringTarget(id: string): Promise<void> {
   try {

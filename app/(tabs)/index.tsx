@@ -8,6 +8,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing, typography, radius } from '../../src/theme';
 import { ExpiryBadge } from '../../src/components/ExpiryBadge';
 import { useWatches } from '../../src/hooks/useWatches';
+import { haptics } from '../../src/haptics';
 import * as BackgroundFetch from 'expo-background-fetch';
 import * as TaskManager from 'expo-task-manager';
 import { BACKGROUND_FETCH_TASK } from '../../src/tasks/background';
@@ -51,7 +52,7 @@ export default function WatchesScreen() {
           <Text style={styles.title}>Cert Watch</Text>
           <TouchableOpacity
             style={styles.addBtn}
-            onPress={() => router.push('/add')}
+            onPress={() => { haptics.light(); router.push('/add'); }}
             activeOpacity={0.8}
           >
             <Ionicons name="add" size={22} color={colors.textPrimary} />
@@ -97,7 +98,7 @@ export default function WatchesScreen() {
             <WatchRow
               key={watch.id}
               watch={watch}
-              onPress={() => router.push(`/watch/${watch.id}`)}
+              onPress={() => { haptics.light(); router.push(`/watch/${watch.id}`); }}
             />
           ))
         )}
