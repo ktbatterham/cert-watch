@@ -72,6 +72,35 @@ async function fetchCertInfoFromCrtSh(domain: string): Promise<CertInfo> {
   };
 }
 
+// Certs expiring within this many days count as "critical" for the initial check.
+export const INITIAL_CRITICAL_DAYS = 7;
+
+// On first add there is no prior state, so the backend deliberately won't push
+// (its events are transition-only, to avoid "you just added this" spam) and the
+// on-device checker pre-seeds the warning band so it won't re-alert either. That
+// means an already-expired or critically-near cert would be added in total
+// silence. This surfaces that one case immediately from the state the scan
+// already returned — returns an event to notify on, or null when the cert is
+// healthy enough to wait for normal monitoring.
+export function initialCriticalEvent(watch: CertWatch): CertEvent | null {
+  const days = watch.daysUntilExpiry;
+  if (days === null || days > INITIAL_CRITICAL_DAYS) return null;
+  return {
+    id: `${Date.now()}-${watch.id}`,
+    watchId: watch.id,
+    domain: watch.domain,
+    detectedAt: new Date().toISOString(),
+    eventType: days <= 0 ? 'expired' : 'expiring_soon',
+    daysUntilExpiry: days,
+    oldSerial: null,
+    newSerial: watch.certSerial,
+    oldIssuer: null,
+    newIssuer: watch.certIssuer,
+    oldExpiry: null,
+    newExpiry: watch.certExpiry,
+  };
+}
+
 export function isDue(watch: CertWatch): boolean {
   if (!watch.lastCheckedAt) return true;
   const elapsed = Date.now() - new Date(watch.lastCheckedAt).getTime();

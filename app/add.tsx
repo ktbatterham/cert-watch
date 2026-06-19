@@ -8,8 +8,10 @@ import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing, typography, radius } from '../src/theme';
 import { ExpiryBadge } from '../src/components/ExpiryBadge';
 import { EcosystemCard } from '../src/components/EcosystemCard';
-import { fetchCertInfo, warningBand } from '../src/tasks/checkCert';
+import { fetchCertInfo, warningBand, initialCriticalEvent } from '../src/tasks/checkCert';
 import { useWatches } from '../src/hooks/useWatches';
+import { addEvent } from '../src/storage/events';
+import { scheduleCertNotification } from '../src/notifications';
 import { haptics } from '../src/haptics';
 import type { CertWatch, CertInfo } from '../src/types';
 
@@ -59,8 +61,19 @@ export default function AddScreen() {
       checkIntervalHours: 24,
       lastWarnedThreshold: warningBand(certInfo.daysUntilExpiry),
     };
+    // The backend won't push on a first observation, and the on-device checker
+    // pre-seeds the warning band above — so an already-critical cert would be
+    // added silently. Surface it immediately with a local notification.
+    const critical = initialCriticalEvent(watch);
+    if (critical) watch.hasAlert = true;
     await add(watch);
-    haptics.success();
+    if (critical) {
+      await addEvent(critical);
+      await scheduleCertNotification(critical);
+      haptics.warning();
+    } else {
+      haptics.success();
+    }
     router.back();
   };
 
