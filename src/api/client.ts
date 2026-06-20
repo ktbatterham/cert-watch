@@ -9,11 +9,21 @@
  * unavailable, so the app keeps working if the backend is down.
  */
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Application from 'expo-application';
 import type { CertInfo } from '../types';
 
 const BASE_URL = 'https://securl-app-production.up.railway.app';
 const OWNER_TOKEN_KEY = 'cw:scan-owner-token';
 const APP_ID = 'com.ktbatterham.certwatch'; // becomes the apns-topic server-side
+
+// Product-telemetry headers sent on every SecURL-backend call so the engine can
+// attribute usage by app/release (never by device or install). Additive: the
+// backend ignores them if absent or malformed. Not sent to crt.sh (third party).
+// version+build comes from the installed binary. Reused by the push module.
+export const CLIENT_HEADERS: Record<string, string> = {
+  'X-SecURL-Client': 'cert-watch-ios',
+  'X-SecURL-Client-Version': `${Application.nativeApplicationVersion ?? '0'}+${Application.nativeBuildVersion ?? '0'}`,
+};
 
 // Stable anonymous identifier the backend uses to scope requests (>= 24 chars,
 // decent entropy). Not a secret. Shared with the push module via the same key.
@@ -62,7 +72,7 @@ export async function fetchLiveCertInfo(domain: string): Promise<CertInfo | null
     const owner = await getOwnerToken();
     const url = `${BASE_URL}/api/certificates/live?url=${encodeURIComponent(`https://${domain}`)}`;
     const res = await fetch(url, {
-      headers: { 'X-Scan-Owner': owner },
+      headers: { ...CLIENT_HEADERS, 'X-Scan-Owner': owner },
       signal: AbortSignal.timeout(15000),
     });
     if (!res.ok) return null;
@@ -99,7 +109,7 @@ export async function createCertMonitoringTarget(domain: string): Promise<string
     const owner = await getOwnerToken();
     const res = await fetch(`${BASE_URL}/api/monitoring-targets`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Scan-Owner': owner },
+      headers: { ...CLIENT_HEADERS, 'Content-Type': 'application/json', 'X-Scan-Owner': owner },
       body: JSON.stringify({ url: `https://${domain}`, kind: 'cert', cadence: 'daily', appId: APP_ID }),
       signal: AbortSignal.timeout(15000),
     });
@@ -136,7 +146,7 @@ export async function fetchCertTargetHistory(targetId: string): Promise<CertHist
     const owner = await getOwnerToken();
     const res = await fetch(
       `${BASE_URL}/api/monitoring-targets/${encodeURIComponent(targetId)}/history`,
-      { headers: { 'X-Scan-Owner': owner }, signal: AbortSignal.timeout(15000) },
+      { headers: { ...CLIENT_HEADERS, 'X-Scan-Owner': owner }, signal: AbortSignal.timeout(15000) },
     );
     if (!res.ok) return [];
     const data = (await res.json()) as TargetHistoryResponse;
@@ -155,7 +165,7 @@ export async function deleteMonitoringTarget(id: string): Promise<void> {
     const owner = await getOwnerToken();
     await fetch(`${BASE_URL}/api/monitoring-targets/${encodeURIComponent(id)}`, {
       method: 'DELETE',
-      headers: { 'X-Scan-Owner': owner },
+      headers: { ...CLIENT_HEADERS, 'X-Scan-Owner': owner },
       signal: AbortSignal.timeout(15000),
     });
   } catch {

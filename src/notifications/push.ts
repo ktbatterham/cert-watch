@@ -10,7 +10,7 @@
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { getOwnerToken } from '../api/client';
+import { getOwnerToken, CLIENT_HEADERS } from '../api/client';
 
 const BASE_URL = 'https://securl-app-production.up.railway.app';
 const APP_ID = 'com.ktbatterham.certwatch'; // becomes the apns-topic server-side
@@ -38,7 +38,7 @@ export async function registerForRemotePush(): Promise<void> {
 
     const res = await fetch(`${BASE_URL}/api/notification-devices`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Scan-Owner': owner },
+      headers: { ...CLIENT_HEADERS, 'Content-Type': 'application/json', 'X-Scan-Owner': owner },
       body: JSON.stringify({ apnsToken, appId: APP_ID, environment }),
     });
     if (!res.ok) return; // best-effort; on-device checks still run
