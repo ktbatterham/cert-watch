@@ -172,3 +172,43 @@ export async function deleteMonitoringTarget(id: string): Promise<void> {
     // Best-effort.
   }
 }
+
+// EXPECTED CONTRACT — confirm with the backend, then adjust this one place.
+// Assumes: POST /api/notification-devices/test  { appId }  scoped by X-Scan-Owner,
+// firing a test push to the device(s) registered for that owner + app.
+const TEST_NOTIFICATION_PATH = '/api/notification-devices/test';
+
+export interface TestNotificationResult {
+  ok: boolean;
+  message: string;
+}
+
+/**
+ * Ask the backend to send a test push to this device. Lets the user confirm the
+ * whole push pipeline (APNs registration → delivery) on demand rather than
+ * waiting for a real cert event. Degrades gracefully: a 404 (endpoint not
+ * deployed yet) returns a friendly "not available" rather than an error.
+ */
+export async function sendTestNotification(): Promise<TestNotificationResult> {
+  try {
+    const owner = await getOwnerToken();
+    const res = await fetch(`${BASE_URL}${TEST_NOTIFICATION_PATH}`, {
+      method: 'POST',
+      headers: { ...CLIENT_HEADERS, 'Content-Type': 'application/json', 'X-Scan-Owner': owner },
+      body: JSON.stringify({ appId: APP_ID }),
+      signal: AbortSignal.timeout(15000),
+    });
+    if (res.status === 404) {
+      return { ok: false, message: "Test notifications aren't available yet — check back after the next backend deploy." };
+    }
+    if (res.status === 400) {
+      return { ok: false, message: 'No registered device found. Make sure notifications are allowed, then try again.' };
+    }
+    if (!res.ok) {
+      return { ok: false, message: `Couldn't send a test notification (server ${res.status}).` };
+    }
+    return { ok: true, message: 'Test notification sent. It should arrive on your device shortly.' };
+  } catch {
+    return { ok: false, message: 'Could not reach the server. Check your connection.' };
+  }
+}

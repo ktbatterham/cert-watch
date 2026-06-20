@@ -1,13 +1,14 @@
 import React, { useState, useCallback } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity,
-  StyleSheet, RefreshControl, ActivityIndicator,
+  StyleSheet, RefreshControl, ActivityIndicator, Alert,
 } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing, typography, radius } from '../../src/theme';
 import { ExpiryBadge } from '../../src/components/ExpiryBadge';
 import { useWatches } from '../../src/hooks/useWatches';
+import { sendTestNotification } from '../../src/api/client';
 import { haptics } from '../../src/haptics';
 import * as BackgroundFetch from 'expo-background-fetch';
 import * as TaskManager from 'expo-task-manager';
@@ -19,6 +20,29 @@ export default function WatchesScreen() {
   const { watches, load } = useWatches();
   const [refreshing, setRefreshing] = useState(false);
   const [bgStatus, setBgStatus] = useState<string>('');
+  const [testing, setTesting] = useState(false);
+
+  const handleTestNotification = () => {
+    Alert.alert(
+      'Send test notification',
+      'Send a test push to this device to confirm notifications are working?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Send',
+          onPress: async () => {
+            haptics.light();
+            setTesting(true);
+            const result = await sendTestNotification();
+            setTesting(false);
+            if (result.ok) haptics.success();
+            else haptics.warning();
+            Alert.alert(result.ok ? 'Sent' : 'Not sent', result.message);
+          },
+        },
+      ],
+    );
+  };
 
   const init = useCallback(async () => {
     await load();
@@ -50,13 +74,28 @@ export default function WatchesScreen() {
       <View style={styles.header}>
         <View style={styles.headerTop}>
           <Text style={styles.title}>Cert Watch</Text>
-          <TouchableOpacity
-            style={styles.addBtn}
-            onPress={() => { haptics.light(); router.push('/add'); }}
-            activeOpacity={0.8}
-          >
-            <Ionicons name="add" size={22} color={colors.textPrimary} />
-          </TouchableOpacity>
+          <View style={styles.headerActions}>
+            <TouchableOpacity
+              style={styles.iconBtn}
+              onPress={handleTestNotification}
+              disabled={testing}
+              activeOpacity={0.8}
+              accessibilityLabel="Send a test notification"
+            >
+              {testing ? (
+                <ActivityIndicator size="small" color={colors.textSecondary} />
+              ) : (
+                <Ionicons name="notifications-outline" size={20} color={colors.textSecondary} />
+              )}
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.addBtn}
+              onPress={() => { haptics.light(); router.push('/add'); }}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="add" size={22} color={colors.textPrimary} />
+            </TouchableOpacity>
+          </View>
         </View>
         <Text style={styles.subtitle}>
           {watches.length === 0
@@ -158,6 +197,16 @@ const styles = StyleSheet.create({
   title: { color: colors.textPrimary, fontSize: typography.xl, fontWeight: '800' },
   subtitle: { color: colors.textMuted, fontSize: typography.sm, marginTop: 2 },
   bgStatus: { color: colors.textMuted, fontSize: typography.xs, marginTop: 4 },
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  iconBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: radius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
   addBtn: {
     width: 36,
     height: 36,
