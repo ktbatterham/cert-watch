@@ -173,41 +173,56 @@ export async function deleteMonitoringTarget(id: string): Promise<void> {
   }
 }
 
-// EXPECTED CONTRACT — confirm with the backend, then adjust this one place.
-// Assumes: POST /api/notification-devices/test  { appId }  scoped by X-Scan-Owner,
-// firing a test push to the device(s) registered for that owner + app.
-const TEST_NOTIFICATION_PATH = '/api/notification-devices/test';
-
 export interface TestNotificationResult {
   ok: boolean;
   message: string;
 }
 
+interface DeviceListResponse {
+  devices?: Array<{ id?: string; appId?: string }>;
+}
+
 /**
- * Ask the backend to send a test push to this device. Lets the user confirm the
- * whole push pipeline (APNs registration → delivery) on demand rather than
- * waiting for a real cert event. Degrades gracefully: a 404 (endpoint not
- * deployed yet) returns a friendly "not available" rather than an error.
+ * Ask the backend to send a test push to this device, so the user can confirm the
+ * whole push pipeline (APNs registration → delivery) on demand rather than waiting
+ * for a real cert event. Per BACKEND-API.md the test endpoint is keyed by the
+ * registration id (POST /api/notification-devices/:id/test, owner-scoped), so we
+ * first look up this app's registration via the list (the raw token is never
+ * echoed; we match on appId, falling back to the owner's only device).
  */
 export async function sendTestNotification(): Promise<TestNotificationResult> {
   try {
     const owner = await getOwnerToken();
-    const res = await fetch(`${BASE_URL}${TEST_NOTIFICATION_PATH}`, {
-      method: 'POST',
-      headers: { ...CLIENT_HEADERS, 'Content-Type': 'application/json', 'X-Scan-Owner': owner },
-      body: JSON.stringify({ appId: APP_ID }),
+    const headers = { ...CLIENT_HEADERS, 'X-Scan-Owner': owner };
+
+    const listRes = await fetch(`${BASE_URL}/api/notification-devices`, {
+      headers,
       signal: AbortSignal.timeout(15000),
     });
+    if (!listRes.ok) {
+      return { ok: false, message: 'Could not check your device registration. Try again shortly.' };
+    }
+    const { devices = [] } = (await listRes.json()) as DeviceListResponse;
+    const device = devices.find((d) => d.appId === APP_ID) ?? devices[0];
+    if (!device?.id) {
+      return { ok: false, message: "This device isn't registered for notifications yet. Allow notifications, reopen the app, then try again." };
+    }
+
+    const res = await fetch(`${BASE_URL}/api/notification-devices/${encodeURIComponent(device.id)}/test`, {
+      method: 'POST',
+      headers,
+      signal: AbortSignal.timeout(15000),
+    });
+    if (res.ok) {
+      return { ok: true, message: 'Test notification sent. It should arrive on your device shortly.' };
+    }
+    if (res.status === 503) {
+      return { ok: false, message: "The server couldn't deliver the test push right now. Try again shortly." };
+    }
     if (res.status === 404) {
-      return { ok: false, message: "Test notifications aren't available yet — check back after the next backend deploy." };
+      return { ok: false, message: 'Your registration was not found. Reopen the app to re-register, then try again.' };
     }
-    if (res.status === 400) {
-      return { ok: false, message: 'No registered device found. Make sure notifications are allowed, then try again.' };
-    }
-    if (!res.ok) {
-      return { ok: false, message: `Couldn't send a test notification (server ${res.status}).` };
-    }
-    return { ok: true, message: 'Test notification sent. It should arrive on your device shortly.' };
+    return { ok: false, message: `Couldn't send a test notification (server ${res.status}).` };
   } catch {
     return { ok: false, message: 'Could not reach the server. Check your connection.' };
   }
