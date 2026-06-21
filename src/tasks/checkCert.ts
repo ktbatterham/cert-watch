@@ -50,7 +50,8 @@ async function fetchCertInfoFromCrtSh(domain: string): Promise<CertInfo> {
   const now = new Date();
   const valid = data
     .filter((c) => {
-      const names = c.name_value.split('\n');
+      // crt.sh is third-party data — guard against malformed entries.
+      const names = (c.name_value ?? '').split('\n');
       return names.includes(domain) || names.includes(`*.${domain.split('.').slice(1).join('.')}`);
     })
     .filter((c) => new Date(c.not_after) > now)
@@ -62,7 +63,7 @@ async function fetchCertInfoFromCrtSh(domain: string): Promise<CertInfo> {
 
   const expiry = new Date(cert.not_after);
   const daysUntilExpiry = Math.ceil((expiry.getTime() - now.getTime()) / 86_400_000);
-  const issuer = cert.issuer_name.match(/CN=([^,]+)/)?.[1] ?? cert.issuer_name;
+  const issuer = cert.issuer_name?.match(/CN=([^,]+)/)?.[1] ?? cert.issuer_name ?? 'Unknown';
 
   return {
     serial: cert.serial_number,
