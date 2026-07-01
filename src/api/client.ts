@@ -10,10 +10,13 @@
  */
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Application from 'expo-application';
+import * as SecureStore from 'expo-secure-store';
+import * as Crypto from 'expo-crypto';
 import type { CertInfo } from '../types';
 
 const BASE_URL = 'https://securl-app-production.up.railway.app';
-const OWNER_TOKEN_KEY = 'cw:scan-owner-token';
+const OWNER_TOKEN_KEY = 'cw_scan_owner_token';        // SecureStore key (no ':')
+const LEGACY_OWNER_TOKEN_KEY = 'cw:scan-owner-token'; // old AsyncStorage key — migrated once
 const APP_ID = 'com.ktbatterham.certwatch'; // becomes the apns-topic server-side
 
 // Product-telemetry headers sent on every SecURL-backend call so the engine can
@@ -29,22 +32,40 @@ export const CLIENT_HEADERS: Record<string, string> = {
 // decent entropy). Not a secret. Shared with the push module via the same key.
 let cachedOwner: string | null = null;
 
+// Crypto-secure owner token: 24 CSPRNG bytes → 48 hex chars (within the backend's
+// 24–256 char / >=8-distinct requirement). expo-crypto, not Math.random.
+async function cryptoToken(): Promise<string> {
+  const bytes = await Crypto.getRandomBytesAsync(24);
+  return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+}
+
 export async function getOwnerToken(): Promise<string> {
   if (cachedOwner) return cachedOwner;
+  // 1 — secure storage (iOS Keychain / Android Keystore)
   try {
-    const stored = await AsyncStorage.getItem(OWNER_TOKEN_KEY);
-    if (stored) {
-      cachedOwner = stored;
-      return stored;
+    const secure = await SecureStore.getItemAsync(OWNER_TOKEN_KEY);
+    if (secure) { cachedOwner = secure; return secure; }
+  } catch {
+    // SecureStore unavailable — fall through.
+  }
+  // 2 — migrate a pre-existing AsyncStorage token so existing installs keep their
+  //     server-side registration (cert watches / notification device).
+  try {
+    const legacy = await AsyncStorage.getItem(LEGACY_OWNER_TOKEN_KEY);
+    if (legacy) {
+      cachedOwner = legacy;
+      await SecureStore.setItemAsync(OWNER_TOKEN_KEY, legacy).catch(() => {});
+      await AsyncStorage.removeItem(LEGACY_OWNER_TOKEN_KEY).catch(() => {});
+      return legacy;
     }
   } catch {
-    // fall through and mint a session-only token
+    // Fall through and mint a fresh token.
   }
-  const seg = Array.from({ length: 4 }, () => Math.random().toString(36).slice(2));
-  const token = `cw-${Date.now().toString(36)}-${seg.join('')}`.slice(0, 120);
+  // 3 — fresh install: mint a crypto-random token
+  const token = await cryptoToken();
   cachedOwner = token;
   try {
-    await AsyncStorage.setItem(OWNER_TOKEN_KEY, token);
+    await SecureStore.setItemAsync(OWNER_TOKEN_KEY, token);
   } catch {
     // non-fatal
   }
