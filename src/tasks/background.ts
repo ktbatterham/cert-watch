@@ -10,11 +10,23 @@ TaskManager.defineTask(BACKGROUND_FETCH_TASK, async () => {
   try {
     const watches = await loadWatches();
     const due = watches.filter(isDue);
+
+    let foundNew = false;
     for (const watch of due) {
-      const event = await checkCert(watch);
-      if (event) await scheduleCertNotification(event);
+      try {
+        const event = await checkCert(watch);
+        if (event) {
+          await scheduleCertNotification(event);
+          foundNew = true;
+        }
+      } catch {
+        // Don't let one failing watch abort the whole task.
+      }
     }
-    return BackgroundFetch.BackgroundFetchResult.NewData;
+
+    return foundNew
+      ? BackgroundFetch.BackgroundFetchResult.NewData
+      : BackgroundFetch.BackgroundFetchResult.NoData;
   } catch {
     return BackgroundFetch.BackgroundFetchResult.Failed;
   }
