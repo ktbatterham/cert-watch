@@ -92,6 +92,7 @@ export default function WatchesScreen() {
               style={styles.addBtn}
               onPress={() => { haptics.light(); router.push('/add'); }}
               activeOpacity={0.8}
+              accessibilityLabel="Add a domain to watch"
             >
               <Ionicons name="add" size={22} color={colors.textPrimary} />
             </TouchableOpacity>

@@ -49,7 +49,7 @@ export function EcosystemCard() {
       <LinkRow
         icon="shield-checkmark-outline"
         label="securl.online"
-        sublabel="Full posture scan — headers, TLS, DNS, third-party"
+        sublabel="Full posture scan: headers, TLS, DNS, third-party"
         url={SECURL_URL}
       />
     </View>

@@ -10,6 +10,7 @@ import { ExpiryBadge } from '../src/components/ExpiryBadge';
 import { EcosystemCard } from '../src/components/EcosystemCard';
 import { fetchCertInfo, warningBand, initialCriticalEvent } from '../src/tasks/checkCert';
 import { useWatches } from '../src/hooks/useWatches';
+import { loadWatches } from '../src/storage/watches';
 import { addEvent } from '../src/storage/events';
 import { scheduleCertNotification } from '../src/notifications';
 import { haptics } from '../src/haptics';
@@ -32,6 +33,13 @@ export default function AddScreen() {
   const handleScan = async () => {
     const clean = sanitiseDomain(domain);
     if (!clean) return;
+    // Guard against watching the same domain twice (duplicates would each
+    // register their own server-side monitoring target).
+    const existing = (await loadWatches()).find((w) => w.domain === clean);
+    if (existing) {
+      Alert.alert('Already watching', `${clean} is already on your watch list.`);
+      return;
+    }
     setStage('scanning');
     try {
       const info = await fetchCertInfo(clean);
@@ -66,15 +74,20 @@ export default function AddScreen() {
     // added silently. Surface it immediately with a local notification.
     const critical = initialCriticalEvent(watch);
     if (critical) watch.hasAlert = true;
-    await add(watch);
-    if (critical) {
-      await addEvent(critical);
-      await scheduleCertNotification(critical);
-      haptics.warning();
-    } else {
-      haptics.success();
+    try {
+      await add(watch);
+      if (critical) {
+        await addEvent(critical);
+        await scheduleCertNotification(critical);
+        haptics.warning();
+      } else {
+        haptics.success();
+      }
+      router.back();
+    } catch {
+      haptics.error();
+      Alert.alert('Could not add watch', 'Something went wrong saving this domain. Please try again.');
     }
-    router.back();
   };
 
   return (
