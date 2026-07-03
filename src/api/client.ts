@@ -82,6 +82,32 @@ interface LiveCertResponse {
   };
 }
 
+// Node's TLS layer (the backend's source) formats validTo like
+// "Aug 24 01:37:14 2026 GMT". Hermes only reliably parses ISO 8601, so on-device
+// `new Date(validTo)` returns NaN and the UI rendered "Invalid Date" (shipped bug,
+// found by a real user on 1.0.4). Normalise to ISO here: try the engine first,
+// then parse the openssl format explicitly, then derive from daysRemaining —
+// which always yields a parseable ISO string.
+const MONTHS: Record<string, number> = {
+  jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5,
+  jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11,
+};
+
+export function toIsoExpiry(validTo: string, daysRemaining: number): string {
+  const direct = new Date(validTo);
+  if (!Number.isNaN(direct.getTime())) return direct.toISOString();
+  const m = validTo.match(/^(\w{3})\s+(\d{1,2})\s+(\d{2}):(\d{2}):(\d{2})\s+(\d{4})\s+GMT$/i);
+  if (m) {
+    const month = MONTHS[m[1].toLowerCase()];
+    if (month !== undefined) {
+      const utc = Date.UTC(Number(m[6]), month, Number(m[2]), Number(m[3]), Number(m[4]), Number(m[5]));
+      if (!Number.isNaN(utc)) return new Date(utc).toISOString();
+    }
+  }
+  // Last resort: approximate from the (always-numeric) day count.
+  return new Date(Date.now() + daysRemaining * 86_400_000).toISOString();
+}
+
 /**
  * Fetch the authoritative *served* certificate via GET /api/certificates/live.
  * Returns null on any failure (network, non-200, no cert) so the caller can fall
@@ -104,12 +130,9 @@ export async function fetchLiveCertInfo(domain: string): Promise<CertInfo | null
       return null;
     }
 
-    const parsed = new Date(c.validTo);
-    const expiry = Number.isNaN(parsed.getTime()) ? c.validTo : parsed.toISOString();
-
     return {
       serial: c.serialNumber,
-      expiry,
+      expiry: toIsoExpiry(c.validTo, c.daysRemaining),
       issuer: c.issuer ?? 'Unknown',
       daysUntilExpiry: c.daysRemaining,
     };
