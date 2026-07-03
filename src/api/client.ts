@@ -26,6 +26,10 @@ const APP_ID = 'com.ktbatterham.certwatch'; // becomes the apns-topic server-sid
 export const CLIENT_HEADERS: Record<string, string> = {
   'X-SecURL-Client': 'cert-watch-ios',
   'X-SecURL-Client-Version': `${Application.nativeApplicationVersion ?? '0'}+${Application.nativeBuildVersion ?? '0'}`,
+  // Release channel for telemetry splits. __DEV__ covers dev/simulator builds;
+  // everything else is a store install. (TestFlight is not reliably
+  // distinguishable from the App Store on-device, so it reports as app-store.)
+  'X-SecURL-Client-Channel': __DEV__ ? 'development' : 'app-store',
 };
 
 // Stable anonymous identifier the backend uses to scope requests (>= 24 chars,
