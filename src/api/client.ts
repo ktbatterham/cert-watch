@@ -207,6 +207,86 @@ export async function fetchCertTargetHistory(targetId: string): Promise<CertHist
   }
 }
 
+// ── Capabilities + owner-scoped cert summary ─────────────────────────────────
+// The backend advertises additive features via GET /api/capabilities so clients
+// can discover endpoints instead of assuming them (CONSUMER-API-MAP guidance).
+// Cached for the app session; a failed fetch just disables gated features.
+
+let cachedMonitoringFeatures: string[] | null | undefined;
+
+export async function getMonitoringFeatures(): Promise<string[] | null> {
+  if (cachedMonitoringFeatures !== undefined) return cachedMonitoringFeatures;
+  try {
+    const res = await fetch(`${BASE_URL}/api/capabilities`, {
+      headers: CLIENT_HEADERS,
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!res.ok) {
+      cachedMonitoringFeatures = null;
+      return null;
+    }
+    const data = (await res.json()) as { monitoring?: { features?: unknown } };
+    const features = data.monitoring?.features;
+    cachedMonitoringFeatures = Array.isArray(features)
+      ? features.filter((f): f is string => typeof f === 'string')
+      : null;
+  } catch {
+    cachedMonitoringFeatures = null;
+  }
+  return cachedMonitoringFeatures;
+}
+
+// The owner-scoped Cert Watch home-screen summary (backend 1.15.x,
+// GET /api/monitoring-cert-summary). We deliberately consume only the compact
+// `summary` counts and `push` health — the fields the home screen renders —
+// to keep the shape surface minimal. Everything is defensively coerced.
+export interface CertServerSummary {
+  totalCerts: number;
+  needsAttention: number;
+  expiringCerts: number;
+  expiredCerts: number;
+  unreachableCerts: number;
+  nextCheckAt: string | null;
+  pushConfigured: boolean;
+  pushReady: boolean;
+}
+
+function asCount(v: unknown): number {
+  const n = Number(v);
+  return Number.isFinite(n) && n >= 0 ? n : 0;
+}
+
+export async function fetchCertServerSummary(): Promise<CertServerSummary | null> {
+  try {
+    const features = await getMonitoringFeatures();
+    if (!features?.includes('cert-watchlist-summary-v1')) return null;
+    const owner = await getOwnerToken();
+    const res = await fetch(`${BASE_URL}/api/monitoring-cert-summary`, {
+      headers: { ...CLIENT_HEADERS, 'X-Scan-Owner': owner },
+      signal: AbortSignal.timeout(15000),
+    });
+    if (!res.ok) return null;
+    const data = (await res.json()) as {
+      summary?: Record<string, unknown>;
+      push?: { configured?: unknown; readyDevices?: unknown };
+    };
+    const s = data.summary;
+    if (!s || typeof s !== 'object') return null;
+    return {
+      totalCerts: asCount(s.totalCerts),
+      needsAttention: asCount(s.needsAttention),
+      expiringCerts: asCount(s.expiringCerts),
+      expiredCerts: asCount(s.expiredCerts),
+      unreachableCerts: asCount(s.unreachableCerts),
+      nextCheckAt: typeof s.nextCheckAt === 'string' ? s.nextCheckAt : null,
+      pushConfigured: data.push?.configured === true,
+      pushReady: asCount(data.push?.readyDevices) > 0,
+    };
+  } catch {
+    return null;
+  }
+}
+
 /** Stop server-side monitoring for a target. Best-effort. */
 export async function deleteMonitoringTarget(id: string): Promise<void> {
   try {
