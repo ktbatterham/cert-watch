@@ -8,7 +8,11 @@ import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing, typography, radius } from '../../src/theme';
 import { ExpiryBadge } from '../../src/components/ExpiryBadge';
 import { useWatches } from '../../src/hooks/useWatches';
-import { sendTestNotification } from '../../src/api/client';
+import {
+  sendTestNotification,
+  fetchCertServerSummary,
+  type CertServerSummary,
+} from '../../src/api/client';
 import { haptics } from '../../src/haptics';
 import * as BackgroundFetch from 'expo-background-fetch';
 import * as TaskManager from 'expo-task-manager';
@@ -20,6 +24,7 @@ export default function WatchesScreen() {
   const { watches, load } = useWatches();
   const [refreshing, setRefreshing] = useState(false);
   const [bgStatus, setBgStatus] = useState<string>('');
+  const [serverSummary, setServerSummary] = useState<CertServerSummary | null>(null);
   const [testing, setTesting] = useState(false);
 
   const handleTestNotification = () => {
@@ -46,6 +51,9 @@ export default function WatchesScreen() {
 
   const init = useCallback(async () => {
     await load();
+    // Authoritative owner-scoped status from the backend (capability-gated;
+    // null on older servers / offline — the local guess below still renders).
+    fetchCertServerSummary().then(setServerSummary).catch(() => {});
     try {
       const status = await BackgroundFetch.getStatusAsync();
       const isRegistered = await TaskManager.isTaskRegisteredAsync(BACKGROUND_FETCH_TASK);
@@ -103,7 +111,27 @@ export default function WatchesScreen() {
             ? 'No domains being watched'
             : `${watches.length} domain${watches.length === 1 ? '' : 's'} watched`}
         </Text>
-        {bgStatus && (
+        {serverSummary ? (
+          <Text style={styles.bgStatus}>
+            {serverSummary.needsAttention > 0 ? (
+              <Text style={styles.statusWarn}>
+                {`▲ ${serverSummary.needsAttention} certificate${serverSummary.needsAttention === 1 ? '' : 's'} need${serverSummary.needsAttention === 1 ? 's' : ''} attention`}
+              </Text>
+            ) : serverSummary.totalCerts > 0 ? (
+              <Text style={styles.statusSafe}>● All certificates healthy</Text>
+            ) : (
+              <Text>○ Server monitoring ready</Text>
+            )}
+            {serverSummary.nextCheckAt
+              ? `  ·  next check ${formatRelativeFuture(serverSummary.nextCheckAt)}`
+              : ''}
+            {serverSummary.pushConfigured
+              ? serverSummary.pushReady
+                ? '  ·  push ✓'
+                : '  ·  push degraded'
+              : '  ·  push not registered'}
+          </Text>
+        ) : bgStatus ? (
           <Text style={styles.bgStatus}>
             {bgStatus === 'active'
               ? '● Background checks active'
@@ -111,7 +139,7 @@ export default function WatchesScreen() {
               ? '○ Background checks pending'
               : '○ Background checks unavailable'}
           </Text>
-        )}
+        ) : null}
       </View>
 
       <ScrollView
@@ -183,6 +211,17 @@ function formatRelative(iso: string): string {
   return new Date(iso).toLocaleDateString();
 }
 
+function formatRelativeFuture(iso: string): string {
+  const diff = new Date(iso).getTime() - Date.now();
+  if (Number.isNaN(diff)) return 'soon';
+  if (diff <= 0) return 'due now';
+  const mins = Math.ceil(diff / 60_000);
+  if (mins < 60) return `in ${mins}m`;
+  const hrs = Math.round(mins / 60);
+  if (hrs < 24) return `in ${hrs}h`;
+  return `in ${Math.round(hrs / 24)}d`;
+}
+
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.bg },
   header: {
@@ -198,6 +237,8 @@ const styles = StyleSheet.create({
   title: { color: colors.textPrimary, fontSize: typography.xl, fontWeight: '800' },
   subtitle: { color: colors.textMuted, fontSize: typography.sm, marginTop: 2 },
   bgStatus: { color: colors.textMuted, fontSize: typography.xs, marginTop: 4 },
+  statusSafe: { color: colors.safe },
+  statusWarn: { color: colors.warning, fontWeight: '600' },
   headerActions: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   iconBtn: {
     width: 36,
