@@ -17,6 +17,7 @@ import { useChecker } from '../../src/hooks/useChecker';
 import { scheduleCertNotification } from '../../src/notifications';
 import { fetchCertTargetHistory, type CertHistoryEntry } from '../../src/api/client';
 import { haptics } from '../../src/haptics';
+import { openScanHandoff } from '../../src/lib/webHandoff';
 import type { CertWatch, CertEvent } from '../../src/types';
 
 export default function WatchDetailScreen() {
@@ -159,6 +160,18 @@ export default function WatchDetailScreen() {
           </Text>
         </TouchableOpacity>
       </SectionCard>
+
+      {/* Mobile → web handoff: Cert Watch covers the certificate; the web app runs
+          a full posture scan of the whole site (contract MOBILE-WEB-GROWTH). */}
+      <TouchableOpacity
+        style={styles.webHandoffBtn}
+        onPress={() => { haptics.light(); openScanHandoff(watch.domain); }}
+        activeOpacity={0.8}
+        accessibilityLabel="Check the full site posture on the web"
+      >
+        <Ionicons name="open-outline" size={16} color={colors.accentLight} />
+        <Text style={styles.webHandoffText}>Check full site posture</Text>
+      </TouchableOpacity>
 
       {/* Certificate details */}
       {watch.certSerial && (
@@ -331,4 +344,15 @@ const styles = StyleSheet.create({
     marginTop: spacing.lg,
   },
   deleteBtnText: { color: colors.critical, fontSize: typography.base, fontWeight: '600' },
+  webHandoffBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.xs,
+    paddingVertical: spacing.sm + 2,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  webHandoffText: { color: colors.accentLight, fontSize: typography.sm, fontWeight: '600' },
 });
