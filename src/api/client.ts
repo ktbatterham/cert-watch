@@ -221,19 +221,18 @@ export async function getMonitoringFeatures(): Promise<string[] | null> {
       headers: CLIENT_HEADERS,
       signal: AbortSignal.timeout(10000),
     });
-    if (!res.ok) {
-      cachedMonitoringFeatures = null;
-      return null;
-    }
+    // Only cache a SUCCESSFUL read. A transient failure/malformed response must
+    // NOT be cached, or a single network blip at launch would disable the gated
+    // enrichment for the whole session; leaving it uncached lets it retry.
+    if (!res.ok) return null;
     const data = (await res.json()) as { monitoring?: { features?: unknown } };
     const features = data.monitoring?.features;
-    cachedMonitoringFeatures = Array.isArray(features)
-      ? features.filter((f): f is string => typeof f === 'string')
-      : null;
+    if (!Array.isArray(features)) return null;
+    cachedMonitoringFeatures = features.filter((f): f is string => typeof f === 'string');
+    return cachedMonitoringFeatures;
   } catch {
-    cachedMonitoringFeatures = null;
+    return null;
   }
-  return cachedMonitoringFeatures;
 }
 
 // The owner-scoped Cert Watch home-screen summary (backend 1.15.x,
