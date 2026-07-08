@@ -12,6 +12,7 @@ import { fetchCertInfo, warningBand, initialCriticalEvent } from '../src/tasks/c
 import { useWatches } from '../src/hooks/useWatches';
 import { loadWatches } from '../src/storage/watches';
 import { loadSettings } from '../src/storage/settings';
+import { getMonitoringFeatures } from '../src/api/client';
 import { addEvent } from '../src/storage/events';
 import { scheduleCertNotification } from '../src/notifications';
 import { haptics } from '../src/haptics';
@@ -57,8 +58,12 @@ export default function AddScreen() {
   const handleAdd = async () => {
     if (!certInfo) return;
     const clean = sanitiseDomain(domain);
-    // Use the user's default cadence from Settings (falls back to daily).
-    const { defaultCadenceHours } = await loadSettings();
+    // Use the user's defaults from Settings (cadence + cert policy).
+    const { defaultCadenceHours, defaultCertPolicy } = await loadSettings();
+    // Only attach the policy when the backend advertises support — an unknown
+    // policy value would reject the whole target creation.
+    const features = await getMonitoringFeatures();
+    const policy = features?.includes('cert-policy-profiles-v1') ? defaultCertPolicy : null;
     const watch: CertWatch = {
       id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
       domain: clean,
@@ -70,6 +75,7 @@ export default function AddScreen() {
       daysUntilExpiry: certInfo.daysUntilExpiry,
       hasAlert: false,
       checkIntervalHours: defaultCadenceHours,
+      policy,
       lastWarnedThreshold: warningBand(certInfo.daysUntilExpiry),
     };
     // The backend won't push on a first observation, and the on-device checker

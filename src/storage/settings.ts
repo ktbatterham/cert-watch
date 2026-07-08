@@ -4,6 +4,7 @@
  * still be overridden on its detail screen).
  */
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import type { CertPolicy } from '../types';
 
 const KEY = 'cw_settings_v1';
 
@@ -11,12 +12,18 @@ export type CadenceHours = 1 | 6 | 24;
 
 export interface CertWatchSettings {
   defaultCadenceHours: CadenceHours;
+  // Default expiry policy applied to newly-added watches (null = legacy bands).
+  defaultCertPolicy: CertPolicy | null;
 }
 
-const DEFAULTS: CertWatchSettings = { defaultCadenceHours: 24 };
+const DEFAULTS: CertWatchSettings = { defaultCadenceHours: 24, defaultCertPolicy: null };
 
 function coerceCadence(v: unknown): CadenceHours {
   return v === 1 || v === 6 || v === 24 ? v : DEFAULTS.defaultCadenceHours;
+}
+
+function coercePolicy(v: unknown): CertPolicy | null {
+  return v === 'production' || v === 'strict' || v === 'renewal-watch' ? v : null;
 }
 
 export async function loadSettings(): Promise<CertWatchSettings> {
@@ -24,7 +31,10 @@ export async function loadSettings(): Promise<CertWatchSettings> {
     const raw = await AsyncStorage.getItem(KEY);
     if (!raw) return DEFAULTS;
     const parsed = JSON.parse(raw) as Partial<CertWatchSettings>;
-    return { defaultCadenceHours: coerceCadence(parsed.defaultCadenceHours) };
+    return {
+      defaultCadenceHours: coerceCadence(parsed.defaultCadenceHours),
+      defaultCertPolicy: coercePolicy(parsed.defaultCertPolicy),
+    };
   } catch {
     return DEFAULTS;
   }

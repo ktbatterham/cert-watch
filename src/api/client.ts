@@ -12,7 +12,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Application from 'expo-application';
 import * as SecureStore from 'expo-secure-store';
 import * as Crypto from 'expo-crypto';
-import type { CertInfo } from '../types';
+import type { CertInfo, CertPolicy } from '../types';
 
 const BASE_URL = 'https://securl-app-production.up.railway.app';
 const OWNER_TOKEN_KEY = 'cw_scan_owner_token';        // SecureStore key (no ':')
@@ -152,13 +152,27 @@ export async function fetchLiveCertInfo(domain: string): Promise<CertInfo | null
  * Best-effort: returns the target id, or null on any failure (the local checker
  * still runs). Idempotent on the backend per (owner, host, kind).
  */
-export async function createCertMonitoringTarget(domain: string): Promise<string | null> {
+export async function createCertMonitoringTarget(
+  domain: string,
+  policy?: CertPolicy | null,
+): Promise<string | null> {
   try {
     const owner = await getOwnerToken();
+    const body: Record<string, unknown> = {
+      url: `https://${domain}`,
+      kind: 'cert',
+      cadence: 'daily',
+      appId: APP_ID,
+    };
+    // Only attach a policy when it's a valid named profile — the backend rejects
+    // the whole request on an unknown value, so never send null/garbage.
+    if (policy === 'production' || policy === 'strict' || policy === 'renewal-watch') {
+      body.policy = policy;
+    }
     const res = await fetch(`${BASE_URL}/api/monitoring-targets`, {
       method: 'POST',
       headers: { ...CLIENT_HEADERS, 'Content-Type': 'application/json', 'X-Scan-Owner': owner },
-      body: JSON.stringify({ url: `https://${domain}`, kind: 'cert', cadence: 'daily', appId: APP_ID }),
+      body: JSON.stringify(body),
       signal: AbortSignal.timeout(15000),
     });
     if (!res.ok) return null;
