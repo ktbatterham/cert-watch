@@ -60,6 +60,16 @@ export default function RootLayout() {
             headerBackTitle: 'Watches',
           }}
         />
+        <Stack.Screen
+          name="settings"
+          options={{
+            headerShown: true,
+            headerTitle: 'Settings',
+            headerStyle: { backgroundColor: '#070b14' },
+            headerTintColor: '#f1f5f9',
+            headerBackTitle: 'Watches',
+          }}
+        />
       </Stack>
     </>
   );

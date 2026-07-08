@@ -3,7 +3,7 @@ import { addEvent } from '../storage/events';
 import { fetchLiveCertInfo } from '../api/client';
 import type { CertWatch, CertEvent, CertInfo } from '../types';
 
-const EXPIRY_WARN_DAYS = [30, 14, 7, 1];
+export const EXPIRY_WARN_DAYS = [30, 14, 7, 1];
 
 // The tightest warning band a cert with `days` remaining has entered, or null if
 // it's still outside the widest band. Used instead of exact-day matching so a
