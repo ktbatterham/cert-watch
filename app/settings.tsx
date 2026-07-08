@@ -13,9 +13,15 @@ import * as Application from 'expo-application';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing, radius, typography } from '../src/theme';
 import { SectionCard } from '../src/components/SectionCard';
-import { loadSettings, saveSettings, type CadenceHours } from '../src/storage/settings';
+import {
+  loadSettings,
+  saveSettings,
+  type CadenceHours,
+  type CertWatchSettings,
+} from '../src/storage/settings';
 import { EXPIRY_WARN_DAYS } from '../src/tasks/checkCert';
-import { sendTestNotification } from '../src/api/client';
+import { sendTestNotification, getMonitoringFeatures } from '../src/api/client';
+import type { CertPolicy } from '../src/types';
 import { haptics } from '../src/haptics';
 
 const CADENCES: { hours: CadenceHours; label: string }[] = [
@@ -24,23 +30,40 @@ const CADENCES: { hours: CadenceHours; label: string }[] = [
   { hours: 24, label: 'Daily' },
 ];
 
+// null = legacy 30/14/7/1-day bands.
+const POLICIES: { value: CertPolicy | null; label: string; detail: string }[] = [
+  { value: null, label: 'Default', detail: 'Warn at 30, 14, 7, and 1 days before expiry.' },
+  { value: 'production', label: 'Production', detail: 'Warn from 14 days out. Best for live services.' },
+  { value: 'strict', label: 'Strict', detail: 'Warn from 30 days out. Extra lead time.' },
+  { value: 'renewal-watch', label: 'Renewal watch', detail: 'Warn from 30 days out, renewal-focused.' },
+];
+
 function SectionLabel({ children }: { children: string }) {
   return <Text style={styles.sectionLabel}>{children}</Text>;
 }
 
 export default function SettingsScreen() {
-  const [cadence, setCadence] = useState<CadenceHours | null>(null);
+  const [settings, setSettings] = useState<CertWatchSettings | null>(null);
+  const [policyGated, setPolicyGated] = useState(false); // backend advertises profiles
   const [testing, setTesting] = useState(false);
 
   useEffect(() => {
-    loadSettings().then((s) => setCadence(s.defaultCadenceHours));
+    loadSettings().then(setSettings);
+    getMonitoringFeatures().then((f) =>
+      setPolicyGated(!!f?.includes('cert-policy-profiles-v1')),
+    );
   }, []);
 
-  const pickCadence = async (hours: CadenceHours) => {
+  const update = async (patch: Partial<CertWatchSettings>) => {
+    if (!settings) return;
+    const next = { ...settings, ...patch };
     haptics.light();
-    setCadence(hours);
-    await saveSettings({ defaultCadenceHours: hours });
+    setSettings(next);
+    await saveSettings(next);
   };
+
+  const cadence = settings?.defaultCadenceHours ?? null;
+  const policy = settings?.defaultCertPolicy ?? null;
 
   const handleTest = () => {
     Alert.alert(
@@ -67,6 +90,14 @@ export default function SettingsScreen() {
   const build = Application.nativeBuildVersion ?? '';
   const warnList = EXPIRY_WARN_DAYS.join(', ');
 
+  if (!settings) {
+    return (
+      <View style={[styles.screen, styles.loading]}>
+        <ActivityIndicator color={colors.accentLight} />
+      </View>
+    );
+  }
+
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
       {/* Monitoring */}
@@ -83,7 +114,7 @@ export default function SettingsScreen() {
               <TouchableOpacity
                 key={c.hours}
                 style={[styles.segmentBtn, active && styles.segmentBtnActive]}
-                onPress={() => pickCadence(c.hours)}
+                onPress={() => update({ defaultCadenceHours: c.hours })}
                 activeOpacity={0.8}
                 accessibilityLabel={`Set default check frequency to ${c.label}`}
               >
@@ -96,16 +127,55 @@ export default function SettingsScreen() {
         </View>
       </SectionCard>
 
-      {/* Warning schedule */}
-      <SectionLabel>Warning schedule</SectionLabel>
-      <SectionCard>
-        <Text style={styles.rowNote}>
-          You’re alerted when a certificate crosses{' '}
-          <Text style={styles.emphasis}>{warnList} days</Text> before expiry, and
-          whenever a certificate expires, is renewed, changes issuer, or becomes
-          unreachable.
-        </Text>
-      </SectionCard>
+      {/* Warning policy — server-backed named profiles when supported, else the
+          read-only legacy schedule. */}
+      {policyGated ? (
+        <>
+          <SectionLabel>Warning policy</SectionLabel>
+          <SectionCard>
+            <Text style={styles.rowNote}>
+              Applied to new domains you add. Sets the server-side expiry warning
+              thresholds. Existing watches keep their current policy.
+            </Text>
+            <View style={styles.policyList}>
+              {POLICIES.map((p) => {
+                const active = policy === p.value;
+                return (
+                  <TouchableOpacity
+                    key={p.label}
+                    style={[styles.policyRow, active && styles.policyRowActive]}
+                    onPress={() => update({ defaultCertPolicy: p.value })}
+                    activeOpacity={0.8}
+                    accessibilityLabel={`Set default certificate policy to ${p.label}`}
+                  >
+                    <Ionicons
+                      name={active ? 'radio-button-on' : 'radio-button-off'}
+                      size={18}
+                      color={active ? colors.accentLight : colors.textMuted}
+                    />
+                    <View style={styles.policyMeta}>
+                      <Text style={styles.policyLabel}>{p.label}</Text>
+                      <Text style={styles.policyDetail}>{p.detail}</Text>
+                    </View>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </SectionCard>
+        </>
+      ) : (
+        <>
+          <SectionLabel>Warning schedule</SectionLabel>
+          <SectionCard>
+            <Text style={styles.rowNote}>
+              You’re alerted when a certificate crosses{' '}
+              <Text style={styles.emphasis}>{warnList} days</Text> before expiry, and
+              whenever a certificate expires, is renewed, changes issuer, or becomes
+              unreachable.
+            </Text>
+          </SectionCard>
+        </>
+      )}
 
       {/* Notifications */}
       <SectionLabel>Notifications</SectionLabel>
@@ -170,6 +240,7 @@ export default function SettingsScreen() {
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.bg },
+  loading: { alignItems: 'center', justifyContent: 'center' },
   content: { padding: spacing.md, paddingBottom: spacing.lg * 2, gap: spacing.xs },
   sectionLabel: {
     color: colors.textMuted,
@@ -205,6 +276,21 @@ const styles = StyleSheet.create({
   segmentBtnActive: { backgroundColor: colors.accentBg, borderColor: colors.accent },
   segmentText: { color: colors.textSecondary, fontSize: typography.sm, fontWeight: '600' },
   segmentTextActive: { color: colors.accentLight },
+  policyList: { marginTop: spacing.sm, gap: spacing.xs },
+  policyRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.sm,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.sm,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: 'transparent',
+  },
+  policyRowActive: { backgroundColor: colors.accentBg, borderColor: colors.accent },
+  policyMeta: { flex: 1, gap: 1 },
+  policyLabel: { color: colors.textPrimary, fontSize: typography.base, fontWeight: '600' },
+  policyDetail: { color: colors.textSecondary, fontSize: typography.xs, lineHeight: 16 },
   actionRow: {
     flexDirection: 'row',
     alignItems: 'center',

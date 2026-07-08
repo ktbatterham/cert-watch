@@ -27,7 +27,7 @@ export function useWatches() {
     await addWatch(watch);
     // Register server-side cert monitoring so the backend checks daily + pushes
     // events even when the app is closed. Best-effort — the local checker still runs.
-    const serverTargetId = await createCertMonitoringTarget(watch.domain);
+    const serverTargetId = await createCertMonitoringTarget(watch.domain, watch.policy);
     await updateWatch({ ...watch, serverTargetId: serverTargetId ?? null });
     await load();
   }, [load]);

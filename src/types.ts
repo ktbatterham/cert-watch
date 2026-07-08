@@ -1,3 +1,8 @@
+// Named server-side expiry policy profiles (backend cert-policy-profiles-v1).
+// `production` warns from 14 days out; `strict` and `renewal-watch` from 30.
+// Absent/null = the legacy 30/14/7/1-day bands.
+export type CertPolicy = 'production' | 'strict' | 'renewal-watch';
+
 export interface CertWatch {
   id: string;
   domain: string;
@@ -9,6 +14,10 @@ export interface CertWatch {
   daysUntilExpiry: number | null;
   hasAlert: boolean;
   checkIntervalHours: 1 | 6 | 24;
+  // Named expiry policy sent to the backend when this watch's monitoring target
+  // was created (null/undefined = legacy bands). Only sent when the backend
+  // advertises cert-policy-profiles-v1.
+  policy?: CertPolicy | null;
   // Id of the backend cert-monitoring target registered for this watch, so the
   // server scans the cert daily and pushes expiry/renewal/issuer events even when
   // the app is closed. `null` = registration was attempted but failed (retried on
