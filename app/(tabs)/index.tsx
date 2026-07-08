@@ -85,6 +85,14 @@ export default function WatchesScreen() {
           <View style={styles.headerActions}>
             <TouchableOpacity
               style={styles.iconBtn}
+              onPress={() => { haptics.light(); router.push('/settings'); }}
+              activeOpacity={0.8}
+              accessibilityLabel="Open settings"
+            >
+              <Ionicons name="settings-outline" size={20} color={colors.textSecondary} />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.iconBtn}
               onPress={handleTestNotification}
               disabled={testing}
               activeOpacity={0.8}

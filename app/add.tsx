@@ -11,6 +11,7 @@ import { EcosystemCard } from '../src/components/EcosystemCard';
 import { fetchCertInfo, warningBand, initialCriticalEvent } from '../src/tasks/checkCert';
 import { useWatches } from '../src/hooks/useWatches';
 import { loadWatches } from '../src/storage/watches';
+import { loadSettings } from '../src/storage/settings';
 import { addEvent } from '../src/storage/events';
 import { scheduleCertNotification } from '../src/notifications';
 import { haptics } from '../src/haptics';
@@ -56,6 +57,8 @@ export default function AddScreen() {
   const handleAdd = async () => {
     if (!certInfo) return;
     const clean = sanitiseDomain(domain);
+    // Use the user's default cadence from Settings (falls back to daily).
+    const { defaultCadenceHours } = await loadSettings();
     const watch: CertWatch = {
       id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
       domain: clean,
@@ -66,7 +69,7 @@ export default function AddScreen() {
       certIssuer: certInfo.issuer,
       daysUntilExpiry: certInfo.daysUntilExpiry,
       hasAlert: false,
-      checkIntervalHours: 24,
+      checkIntervalHours: defaultCadenceHours,
       lastWarnedThreshold: warningBand(certInfo.daysUntilExpiry),
     };
     // The backend won't push on a first observation, and the on-device checker
