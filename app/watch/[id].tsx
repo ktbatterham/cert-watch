@@ -10,18 +10,24 @@ import { ExpiryBadge } from '../../src/components/ExpiryBadge';
 import { SectionCard } from '../../src/components/SectionCard';
 import { CertEventRow } from '../../src/components/CertEventRow';
 import { ServerTimeline } from '../../src/components/ServerTimeline';
+import { ServerEventCard } from '../../src/components/ServerEventCard';
 import { loadWatches, updateWatch } from '../../src/storage/watches';
 import { getEventsForWatch } from '../../src/storage/events';
 import { useWatches } from '../../src/hooks/useWatches';
 import { useChecker } from '../../src/hooks/useChecker';
 import { scheduleCertNotification } from '../../src/notifications';
-import { fetchCertTargetHistory, type CertHistoryEntry } from '../../src/api/client';
+import {
+  fetchCertTargetHistory,
+  fetchCertTargetStatus,
+  type CertHistoryEntry,
+  type ServerMonitoringEvent,
+} from '../../src/api/client';
 import { haptics } from '../../src/haptics';
 import { openScanHandoff } from '../../src/lib/webHandoff';
 import type { CertWatch, CertEvent } from '../../src/types';
 
 export default function WatchDetailScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, eventId } = useLocalSearchParams<{ id: string; eventId?: string }>();
   const router = useRouter();
   const { remove, clearAlert } = useWatches();
   const { check } = useChecker();
@@ -29,6 +35,7 @@ export default function WatchDetailScreen() {
   const [watch, setWatch] = useState<CertWatch | null>(null);
   const [events, setEvents] = useState<CertEvent[]>([]);
   const [serverHistory, setServerHistory] = useState<CertHistoryEntry[]>([]);
+  const [serverEvents, setServerEvents] = useState<ServerMonitoringEvent[]>([]);
   const [checking, setChecking] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -42,9 +49,13 @@ export default function WatchDetailScreen() {
     setEvents(evts.sort((a, b) =>
       new Date(b.detectedAt).getTime() - new Date(a.detectedAt).getTime(),
     ));
-    // Pull the backend's authoritative monitoring timeline (best-effort).
+    // Pull the backend's authoritative monitoring timeline (best-effort) and,
+    // gated on mobile-monitoring-explanations-v1, the fuller server-authored
+    // explanation for the most recent check.
     if (w.serverTargetId) {
       setServerHistory(await fetchCertTargetHistory(w.serverTargetId));
+      const statusMap = await fetchCertTargetStatus();
+      setServerEvents(statusMap?.get(w.serverTargetId)?.events ?? []);
     }
     if (w.hasAlert) await clearAlert(id);
   }, [id, clearAlert]);
@@ -185,6 +196,26 @@ export default function WatchDetailScreen() {
             {watch.certIssuer && (
               <DetailRow label="Issuer" value={watch.certIssuer} />
             )}
+          </SectionCard>
+        </View>
+      )}
+
+      {/* Server-authored explanation for the most recent monitored check —
+          mobile-monitoring-explanations-v1. Renders backend title/message/
+          changedEvidence/severity/nextAction directly; no locally-composed
+          copy. Sits above the checked-eventType timeline below, which stays
+          as the full historical fallback when this capability is absent. */}
+      {serverEvents.length > 0 && (
+        <View>
+          <Text style={styles.sectionLabel}>What changed (server-monitored)</Text>
+          <SectionCard style={{ padding: 0 }}>
+            {serverEvents.map((event) => (
+              <ServerEventCard
+                key={event.eventId}
+                event={event}
+                highlighted={event.eventId === eventId}
+              />
+            ))}
           </SectionCard>
         </View>
       )}

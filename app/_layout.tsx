@@ -1,16 +1,19 @@
-import { Stack } from 'expo-router';
+import { Stack, useRouter } from 'expo-router';
 import { useEffect } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { View } from 'react-native';
+import * as Notifications from 'expo-notifications';
 import '../src/tasks/background';
 import { requestNotificationPermissions } from '../src/notifications';
 import { registerForRemotePush } from '../src/notifications/push';
 import { registerBackgroundFetch } from '../src/tasks/background';
 import { useOnboarding } from '../src/onboarding/useOnboarding';
 import { Onboarding } from '../src/components/Onboarding';
+import { loadWatches } from '../src/storage/watches';
 import { colors } from '../src/theme';
 
 export default function RootLayout() {
+  const router = useRouter();
   const { seen, dismiss } = useOnboarding();
 
   // Ask for notification permission + register background/push only AFTER
@@ -23,6 +26,47 @@ export default function RootLayout() {
       registerForRemotePush().catch(() => {});
     })();
   }, [seen]);
+
+  // Tapping a cert push (or a local expiry/renewal notification) opens the
+  // matching watch. Cert Watch had no push-tap routing before this — the
+  // backend's cert APNs payloads carry top-level targetId/eventId (mobile-
+  // monitoring-explanations-v1) alongside host; local notifications now carry
+  // watchId/eventId (see src/notifications/index.ts). Route by targetId/watchId
+  // first, falling back to host/domain — matching the pattern already shipped
+  // in Header Watch and SecURL.
+  useEffect(() => {
+    const sub = Notifications.addNotificationResponseReceivedListener((response) => {
+      try {
+        const data = response.notification.request.content.data as Record<string, unknown>;
+        const host = typeof data?.host === 'string' ? data.host : null;
+        const targetId = typeof data?.targetId === 'string' ? data.targetId : null;
+        const watchId = typeof data?.watchId === 'string' ? data.watchId : null;
+        const eventId = typeof data?.eventId === 'string' ? data.eventId : null;
+        loadWatches()
+          .then((ws) => {
+            const match = ws.find(
+              (w) =>
+                (watchId && w.id === watchId) ||
+                (targetId && w.serverTargetId === targetId) ||
+                (host && w.domain === host),
+            );
+            if (match) {
+              router.push(
+                eventId
+                  ? `/watch/${match.id}?eventId=${encodeURIComponent(eventId)}`
+                  : `/watch/${match.id}`,
+              );
+            } else {
+              router.push('/');
+            }
+          })
+          .catch(() => {});
+      } catch {
+        // ignore malformed payloads
+      }
+    });
+    return () => sub.remove();
+  }, [router]);
 
   if (seen === null) return <View style={{ flex: 1, backgroundColor: colors.bg }} />;
 
