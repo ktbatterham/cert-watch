@@ -43,7 +43,7 @@ export async function scheduleCertNotification(event: CertEvent): Promise<void> 
   }
 
   await Notifications.scheduleNotificationAsync({
-    content: { title, body },
+    content: { title, body, data: { watchId: event.watchId, eventId: event.id } },
     trigger: null,
   });
 }

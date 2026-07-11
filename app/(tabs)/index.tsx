@@ -12,6 +12,7 @@ import {
   sendTestNotification,
   fetchCertServerSummary,
   type CertServerSummary,
+  type ServerTargetStatus,
 } from '../../src/api/client';
 import { haptics } from '../../src/haptics';
 import * as BackgroundFetch from 'expo-background-fetch';
@@ -21,7 +22,7 @@ import type { CertWatch } from '../../src/types';
 
 export default function WatchesScreen() {
   const router = useRouter();
-  const { watches, load } = useWatches();
+  const { watches, serverStatus, load } = useWatches();
   const [refreshing, setRefreshing] = useState(false);
   const [bgStatus, setBgStatus] = useState<string>('');
   const [serverSummary, setServerSummary] = useState<CertServerSummary | null>(null);
@@ -174,6 +175,7 @@ export default function WatchesScreen() {
             <WatchRow
               key={watch.id}
               watch={watch}
+              serverStatus={serverStatus.get(watch.id)}
               onPress={() => { haptics.light(); router.push(`/watch/${watch.id}`); }}
             />
           ))
@@ -183,7 +185,20 @@ export default function WatchesScreen() {
   );
 }
 
-function WatchRow({ watch, onPress }: { watch: CertWatch; onPress: () => void }) {
+function WatchRow({
+  watch,
+  serverStatus,
+  onPress,
+}: {
+  watch: CertWatch;
+  serverStatus?: ServerTargetStatus;
+  onPress: () => void;
+}) {
+  // Prefer the backend's authoritative change copy when it flagged something;
+  // otherwise fall back to the local issuer/checked-at line.
+  const needsAttention = serverStatus?.state === 'needs_attention';
+  const serverChange = serverStatus?.changeTitle ?? null;
+
   return (
     <TouchableOpacity style={styles.row} onPress={onPress} activeOpacity={0.75}>
       <View style={styles.rowLeft}>
@@ -193,7 +208,14 @@ function WatchRow({ watch, onPress }: { watch: CertWatch; onPress: () => void })
             <View style={styles.alertDot} />
           )}
         </View>
-        {watch.certIssuer ? (
+        {serverChange ? (
+          <Text
+            style={[styles.rowIssuer, needsAttention && styles.rowIssuerAlert]}
+            numberOfLines={1}
+          >
+            {needsAttention ? '▲ ' : ''}{serverChange}
+          </Text>
+        ) : watch.certIssuer ? (
           <Text style={styles.rowIssuer} numberOfLines={1}>{watch.certIssuer}</Text>
         ) : (
           <Text style={styles.rowIssuer}>Not yet checked</Text>
@@ -300,5 +322,6 @@ const styles = StyleSheet.create({
     backgroundColor: colors.critical,
   },
   rowIssuer: { color: colors.textMuted, fontSize: typography.xs, marginTop: 2 },
+  rowIssuerAlert: { color: colors.warning, fontWeight: '600' },
   rowTime: { color: colors.textMuted, fontSize: typography.xs, marginTop: 1 },
 });

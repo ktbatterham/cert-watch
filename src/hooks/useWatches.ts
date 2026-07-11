@@ -1,11 +1,31 @@
 import { useState, useCallback } from 'react';
 import { loadWatches, addWatch, updateWatch, removeWatch } from '../storage/watches';
 import { removeEventsForWatch } from '../storage/events';
-import { createCertMonitoringTarget, deleteMonitoringTarget } from '../api/client';
+import {
+  createCertMonitoringTarget,
+  deleteMonitoringTarget,
+  fetchCertTargetStatus,
+  type ServerTargetStatus,
+} from '../api/client';
 import type { CertWatch } from '../types';
 
 export function useWatches() {
   const [watches, setWatches] = useState<CertWatch[]>([]);
+  // Server-authored per-watch status keyed by LOCAL watch id (mapped via
+  // serverTargetId). Empty/absent = fall back to local fields.
+  const [serverStatus, setServerStatus] = useState<Map<string, ServerTargetStatus>>(new Map());
+
+  const loadServerStatus = useCallback(async (data: CertWatch[]) => {
+    const byServerId = await fetchCertTargetStatus();
+    if (!byServerId) return;
+    const byLocalId = new Map<string, ServerTargetStatus>();
+    for (const w of data) {
+      if (w.serverTargetId && byServerId.has(w.serverTargetId)) {
+        byLocalId.set(w.id, byServerId.get(w.serverTargetId)!);
+      }
+    }
+    setServerStatus(byLocalId);
+  }, []);
 
   const load = useCallback(async () => {
     let data = await loadWatches();
@@ -21,7 +41,8 @@ export function useWatches() {
       data = await loadWatches();
       setWatches(data);
     }
-  }, []);
+    loadServerStatus(data);
+  }, [loadServerStatus]);
 
   const add = useCallback(async (watch: CertWatch) => {
     await addWatch(watch);
@@ -53,5 +74,5 @@ export function useWatches() {
     }
   }, []);
 
-  return { watches, load, add, update, remove, clearAlert };
+  return { watches, serverStatus, load, add, update, remove, clearAlert };
 }
