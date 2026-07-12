@@ -13,6 +13,7 @@ import * as Application from 'expo-application';
 import * as SecureStore from 'expo-secure-store';
 import * as Crypto from 'expo-crypto';
 import type { CertInfo, CertPolicy } from '../types';
+import { parseLiveCertResponse } from './schemas';
 
 const BASE_URL = 'https://securl-app-production.up.railway.app';
 const OWNER_TOKEN_KEY = 'cw_scan_owner_token';        // SecureStore key (no ':')
@@ -76,16 +77,6 @@ export async function getOwnerToken(): Promise<string> {
   return token;
 }
 
-interface LiveCertResponse {
-  certificate?: {
-    available?: boolean;
-    issuer?: string;
-    validTo?: string;
-    daysRemaining?: number;
-    serialNumber?: string;
-  };
-}
-
 // Node's TLS layer (the backend's source) formats validTo like
 // "Aug 24 01:37:14 2026 GMT". Hermes only reliably parses ISO 8601, so on-device
 // `new Date(validTo)` returns NaN and the UI rendered "Invalid Date" (shipped bug,
@@ -128,11 +119,8 @@ export async function fetchLiveCertInfo(domain: string): Promise<CertInfo | null
     });
     if (!res.ok) return null;
 
-    const data = (await res.json()) as LiveCertResponse;
-    const c = data.certificate;
-    if (!c || c.available === false || !c.serialNumber || !c.validTo || c.daysRemaining == null) {
-      return null;
-    }
+    const c = parseLiveCertResponse(await res.json());
+    if (!c) return null;
 
     return {
       serial: c.serialNumber,
