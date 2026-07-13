@@ -13,7 +13,7 @@ import * as Application from 'expo-application';
 import * as SecureStore from 'expo-secure-store';
 import * as Crypto from 'expo-crypto';
 import type { CertInfo, CertPolicy } from '../types';
-import { parseLiveCertResponse } from './schemas';
+import { parseLiveCertResponse, parseMonitoringHealth, type ParsedMonitoringHealth } from './schemas';
 
 const BASE_URL = 'https://securl-app-production.up.railway.app';
 const OWNER_TOKEN_KEY = 'cw_scan_owner_token';        // SecureStore key (no ':')
@@ -422,6 +422,26 @@ export async function fetchCertServerSummary(): Promise<CertServerSummary | null
       pushConfigured: data.push?.configured === true,
       pushReady: asCount(data.push?.readyDevices) > 0,
     };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Fetch the operational health of the server-side monitoring pipeline
+ * (GET /api/monitoring-health) for the home screen's monitoring-confidence
+ * caption. Purely additive UI: returns null on any failure (network, non-200,
+ * shape drift) and the caller renders nothing.
+ */
+export async function fetchMonitoringHealth(): Promise<ParsedMonitoringHealth | null> {
+  try {
+    const owner = await getOwnerToken();
+    const res = await fetch(`${BASE_URL}/api/monitoring-health`, {
+      headers: { ...CLIENT_HEADERS, 'X-Scan-Owner': owner },
+      signal: AbortSignal.timeout(15000),
+    });
+    if (!res.ok) return null;
+    return parseMonitoringHealth(await res.json());
   } catch {
     return null;
   }

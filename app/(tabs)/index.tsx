@@ -11,9 +11,11 @@ import { useWatches } from '../../src/hooks/useWatches';
 import {
   sendTestNotification,
   fetchCertServerSummary,
+  fetchMonitoringHealth,
   type CertServerSummary,
   type ServerTargetStatus,
 } from '../../src/api/client';
+import type { ParsedMonitoringHealth } from '../../src/api/schemas';
 import { haptics } from '../../src/haptics';
 import * as BackgroundFetch from 'expo-background-fetch';
 import * as TaskManager from 'expo-task-manager';
@@ -26,6 +28,7 @@ export default function WatchesScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [bgStatus, setBgStatus] = useState<string>('');
   const [serverSummary, setServerSummary] = useState<CertServerSummary | null>(null);
+  const [monitoringHealth, setMonitoringHealth] = useState<ParsedMonitoringHealth | null>(null);
   const [testing, setTesting] = useState(false);
 
   const handleTestNotification = () => {
@@ -55,6 +58,9 @@ export default function WatchesScreen() {
     // Authoritative owner-scoped status from the backend (capability-gated;
     // null on older servers / offline — the local guess below still renders).
     fetchCertServerSummary().then(setServerSummary).catch(() => {});
+    // Pipeline-level confidence caption ("is server monitoring itself working").
+    // Best-effort: null (offline / drift) simply renders nothing.
+    fetchMonitoringHealth().then(setMonitoringHealth).catch(() => {});
     try {
       const status = await BackgroundFetch.getStatusAsync();
       const isRegistered = await TaskManager.isTaskRegisteredAsync(BACKGROUND_FETCH_TASK);
@@ -181,8 +187,29 @@ export default function WatchesScreen() {
           ))
         )}
       </ScrollView>
+
+      {monitoringHealth && watches.length > 0 && (
+        <Text style={styles.healthFooter}>{monitoringHealthCaption(monitoringHealth)}</Text>
+      )}
     </View>
   );
+}
+
+// Subtle confidence caption for the server monitoring pipeline, from
+// /api/monitoring-health. Degraded when the sweep scheduler is off/unhealthy or
+// the push channel can't deliver; otherwise a quiet "it's working" line.
+function monitoringHealthCaption(health: ParsedMonitoringHealth): string {
+  const degraded =
+    !health.schedulerEnabled ||
+    !health.lastSweepHealthy ||
+    !health.notificationsEnabled ||
+    !health.notificationCredentialsConfigured;
+  const base = degraded
+    ? 'Monitoring degraded: checks may be delayed'
+    : 'Server monitoring active · last sweep healthy';
+  return health.pushDevicesNeedingRegistration > 0
+    ? `${base} · re-enable notifications on this device`
+    : base;
 }
 
 function WatchRow({
@@ -324,4 +351,12 @@ const styles = StyleSheet.create({
   rowIssuer: { color: colors.textMuted, fontSize: typography.xs, marginTop: 2 },
   rowIssuerAlert: { color: colors.warning, fontWeight: '600' },
   rowTime: { color: colors.textMuted, fontSize: typography.xs, marginTop: 1 },
+  healthFooter: {
+    color: colors.textMuted,
+    fontSize: typography.xs,
+    textAlign: 'center',
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.xs,
+  },
 });

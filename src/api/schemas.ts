@@ -54,6 +54,71 @@ export interface ParsedLiveCertificate {
  * crt.sh) — but now logs in dev so a backend field rename shows up
  * immediately instead of silently degrading to "always falls back".
  */
+// ── Monitoring health (GET /api/monitoring-health) ─────────────────────────
+// Owner-agnostic operational health of the server-side monitoring pipeline —
+// consumed by the home screen's confidence caption ("is monitoring working").
+// We validate only the fields that caption reads; everything else passes
+// through untouched. Field names verified against a live production capture
+// (2026-07-13, securl-app-production.up.railway.app).
+const RawMonitoringHealthSchema = z
+  .object({
+    summary: z
+      .object({
+        pushDevicesNeedingRegistration: z.number().optional(),
+      })
+      .passthrough()
+      .optional(),
+    scheduler: z
+      .object({
+        enabled: z.boolean().optional(),
+        lastSweepHealthy: z.boolean().optional(),
+      })
+      .passthrough()
+      .optional(),
+    notifications: z
+      .object({
+        enabled: z.boolean().optional(),
+        credentialsConfigured: z.boolean().optional(),
+      })
+      .passthrough()
+      .optional(),
+  })
+  .passthrough();
+
+export interface ParsedMonitoringHealth {
+  schedulerEnabled: boolean;
+  lastSweepHealthy: boolean;
+  notificationsEnabled: boolean;
+  notificationCredentialsConfigured: boolean;
+  pushDevicesNeedingRegistration: number;
+}
+
+/**
+ * Validate the `GET /api/monitoring-health` response at the boundary. Returns
+ * null when the payload doesn't match (caller renders nothing — this is a
+ * confidence hint, never a blocker). Missing individual fields default to the
+ * healthy value so an additive backend change can't paint a false "degraded".
+ */
+export function parseMonitoringHealth(raw: unknown): ParsedMonitoringHealth | null {
+  const parsed = RawMonitoringHealthSchema.safeParse(raw);
+  if (!parsed.success) {
+    logShapeDrift('monitoring-health', parsed.error.issues);
+    return null;
+  }
+  const { summary, scheduler, notifications } = parsed.data;
+  return {
+    schedulerEnabled: scheduler?.enabled !== false,
+    lastSweepHealthy: scheduler?.lastSweepHealthy !== false,
+    notificationsEnabled: notifications?.enabled !== false,
+    notificationCredentialsConfigured: notifications?.credentialsConfigured !== false,
+    pushDevicesNeedingRegistration:
+      typeof summary?.pushDevicesNeedingRegistration === 'number' &&
+      summary.pushDevicesNeedingRegistration > 0
+        ? summary.pushDevicesNeedingRegistration
+        : 0,
+  };
+}
+
 export function parseLiveCertResponse(raw: unknown): ParsedLiveCertificate | null {
   const parsed = RawLiveCertResponseSchema.safeParse(raw);
   if (!parsed.success) {
