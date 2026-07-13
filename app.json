@@ -50,7 +50,14 @@
           "color": "#2563eb"
         }
       ],
-      "expo-secure-store"
+      "expo-secure-store",
+      [
+        "@sentry/react-native/expo",
+        {
+          "organization": "securl",
+          "project": "cert-watch"
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true

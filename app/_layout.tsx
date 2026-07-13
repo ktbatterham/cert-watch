@@ -3,6 +3,7 @@ import { useEffect } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { View } from 'react-native';
 import * as Notifications from 'expo-notifications';
+import * as Sentry from '@sentry/react-native';
 import '../src/tasks/background';
 import { requestNotificationPermissions } from '../src/notifications';
 import { registerForRemotePush } from '../src/notifications/push';
@@ -12,7 +13,17 @@ import { Onboarding } from '../src/components/Onboarding';
 import { loadWatches } from '../src/storage/watches';
 import { colors } from '../src/theme';
 
-export default function RootLayout() {
+// Privacy-safe crash reporting: no PII, no user identity, no tracing, and no
+// custom context (watched domains and owner tokens must never reach Sentry).
+Sentry.init({
+  dsn: 'https://094f68f5d75a0d3e1700b9dc24434529@o4511729899601920.ingest.de.sentry.io/4511729999544400',
+  enabled: !__DEV__,
+  sendDefaultPii: false,
+  tracesSampleRate: 0,
+  environment: __DEV__ ? 'development' : 'production',
+});
+
+function RootLayout() {
   const router = useRouter();
   const { seen, dismiss } = useOnboarding();
 
@@ -118,3 +129,5 @@ export default function RootLayout() {
     </>
   );
 }
+
+export default Sentry.wrap(RootLayout);
