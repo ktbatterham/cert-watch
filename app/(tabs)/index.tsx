@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity,
   StyleSheet, RefreshControl, ActivityIndicator, Alert,
@@ -20,6 +20,7 @@ import { haptics } from '../../src/haptics';
 import * as BackgroundFetch from 'expo-background-fetch';
 import * as TaskManager from 'expo-task-manager';
 import { BACKGROUND_FETCH_TASK } from '../../src/tasks/background';
+import { deriveAttention } from '../../src/lib/attention';
 import type { CertWatch } from '../../src/types';
 
 export default function WatchesScreen() {
@@ -30,6 +31,11 @@ export default function WatchesScreen() {
   const [serverSummary, setServerSummary] = useState<CertServerSummary | null>(null);
   const [monitoringHealth, setMonitoringHealth] = useState<ParsedMonitoringHealth | null>(null);
   const [testing, setTesting] = useState(false);
+
+  // Attention-first ordering + counts (temporary client-side derivation; see
+  // src/lib/attention.ts — replaced wholesale by monitoring-attention-v1).
+  const attention = useMemo(() => deriveAttention(watches, serverStatus), [watches, serverStatus]);
+  const attentionCount = attention.counts.attention + attention.counts.critical;
 
   const handleTestNotification = () => {
     Alert.alert(
@@ -128,11 +134,9 @@ export default function WatchesScreen() {
         </Text>
         {serverSummary ? (
           <Text style={styles.bgStatus}>
-            {serverSummary.needsAttention > 0 ? (
-              <Text style={styles.statusWarn}>
-                {`▲ ${serverSummary.needsAttention} certificate${serverSummary.needsAttention === 1 ? '' : 's'} need${serverSummary.needsAttention === 1 ? 's' : ''} attention`}
-              </Text>
-            ) : serverSummary.totalCerts > 0 ? (
+            {/* Attention counts render in the attention bar below (src/lib/attention.ts),
+                which supersets this summary with local-expiry fallback. */}
+            {serverSummary.needsAttention > 0 ? null : serverSummary.totalCerts > 0 ? (
               <Text style={styles.statusSafe}>● All certificates healthy</Text>
             ) : (
               <Text>○ Server monitoring ready</Text>
@@ -157,6 +161,20 @@ export default function WatchesScreen() {
         ) : null}
       </View>
 
+      {attentionCount > 0 && (
+        <View style={styles.attentionBar}>
+          <View
+            style={[
+              styles.attentionDot,
+              attention.state === 'critical' && styles.attentionDotCritical,
+            ]}
+          />
+          <Text style={styles.attentionText}>
+            {attentionCount} need{attentionCount === 1 ? 's' : ''} attention
+          </Text>
+        </View>
+      )}
+
       <ScrollView
         style={styles.list}
         contentContainerStyle={watches.length === 0 ? styles.emptyContainer : undefined}
@@ -177,7 +195,7 @@ export default function WatchesScreen() {
             </Text>
           </View>
         ) : (
-          watches.map((watch) => (
+          attention.orderedWatches.map((watch) => (
             <WatchRow
               key={watch.id}
               watch={watch}
@@ -314,6 +332,23 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  attentionBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.borderSubtle,
+  },
+  attentionDot: {
+    width: 8,
+    height: 8,
+    borderRadius: radius.full,
+    backgroundColor: colors.warning,
+  },
+  attentionDotCritical: { backgroundColor: colors.critical },
+  attentionText: { color: colors.warning, fontSize: typography.sm, fontWeight: '600' },
   list: { flex: 1 },
   emptyContainer: { flexGrow: 1 },
   empty: {
