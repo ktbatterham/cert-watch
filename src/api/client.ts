@@ -237,6 +237,31 @@ export async function getMonitoringFeatures(): Promise<string[] | null> {
   }
 }
 
+// Same pattern as getMonitoringFeatures, but for the `notifications` block of
+// GET /api/capabilities. Gates Android FCM push registration on
+// `android-fcm-push-v1` (backend PRs #379/#380 — the flag only appears once
+// FCM credentials are configured server-side). Same caching rule: only a
+// successful read is cached, so a launch-time blip retries next call.
+let cachedNotificationFeatures: string[] | null | undefined;
+
+export async function getNotificationFeatures(): Promise<string[] | null> {
+  if (cachedNotificationFeatures !== undefined) return cachedNotificationFeatures;
+  try {
+    const res = await fetch(`${BASE_URL}/api/capabilities`, {
+      headers: CLIENT_HEADERS,
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!res.ok) return null;
+    const data = (await res.json()) as { notifications?: { features?: unknown } };
+    const features = data.notifications?.features;
+    if (!Array.isArray(features)) return null;
+    cachedNotificationFeatures = features.filter((f): f is string => typeof f === 'string');
+    return cachedNotificationFeatures;
+  } catch {
+    return null;
+  }
+}
+
 // Server-authored, per-event explanation copy from /api/monitoring-cert-summary
 // `targets[].events[]` (backend capability `mobile-monitoring-explanations-v1`,
 // engine PR #374, 2026-07-11 — same monitoring-events builder as the posture

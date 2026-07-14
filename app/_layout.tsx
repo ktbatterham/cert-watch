@@ -44,7 +44,10 @@ function RootLayout() {
   // monitoring-explanations-v1) alongside host; local notifications now carry
   // watchId/eventId (see src/notifications/index.ts). Route by targetId/watchId
   // first, falling back to host/domain — matching the pattern already shipped
-  // in Header Watch and SecURL.
+  // in Header Watch and SecURL. Android note: FCM delivers nested `data` object
+  // fields JSON-string encoded, but everything read here is a top-level string
+  // (host/targetId/watchId/eventId), which arrives as-is on both platforms —
+  // no parse fallback needed.
   useEffect(() => {
     const sub = Notifications.addNotificationResponseReceivedListener((response) => {
       try {
