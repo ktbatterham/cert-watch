@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity,
   StyleSheet, RefreshControl, ActivityIndicator, Alert,
@@ -20,7 +20,9 @@ import { haptics } from '../../src/haptics';
 import * as BackgroundFetch from 'expo-background-fetch';
 import * as TaskManager from 'expo-task-manager';
 import { BACKGROUND_FETCH_TASK } from '../../src/tasks/background';
-import { deriveAttention } from '../../src/lib/attention';
+import { deriveAttention, attentionFromServer } from '../../src/lib/attention';
+import { fetchMonitoringAttention } from '../../src/api/client';
+import type { ParsedAttention } from '../../src/api/schemas';
 import type { CertWatch } from '../../src/types';
 
 export default function WatchesScreen() {
@@ -32,9 +34,27 @@ export default function WatchesScreen() {
   const [monitoringHealth, setMonitoringHealth] = useState<ParsedMonitoringHealth | null>(null);
   const [testing, setTesting] = useState(false);
 
-  // Attention-first ordering + counts (temporary client-side derivation; see
-  // src/lib/attention.ts — replaced wholesale by monitoring-attention-v1).
-  const attention = useMemo(() => deriveAttention(watches, serverStatus), [watches, serverStatus]);
+  // Attention-first ordering + counts. Prefer the server-authored
+  // monitoring-attention-v1 rollup when the capability is live; fall back to the
+  // local derivation (byte-identical to before) when the flag is absent or the
+  // fetch fails. Both map to one AttentionSummary in src/lib/attention.ts.
+  const [serverAttention, setServerAttention] = useState<ParsedAttention | null>(null);
+  useEffect(() => {
+    let alive = true;
+    fetchMonitoringAttention().then((a) => {
+      if (alive) setServerAttention(a);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [watches]);
+  const attention = useMemo(
+    () =>
+      serverAttention
+        ? attentionFromServer(serverAttention, watches)
+        : deriveAttention(watches, serverStatus),
+    [serverAttention, watches, serverStatus],
+  );
   const attentionCount = attention.counts.attention + attention.counts.critical;
 
   const handleTestNotification = () => {

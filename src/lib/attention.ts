@@ -8,12 +8,16 @@
  * server-severity critical), then attention, each ordered by fewest days
  * remaining, then everything else in its existing order (stable).
  *
- * TEMPORARY: this client-side derivation stands in for backend request #7
- * (`monitoring-attention-v1` rollup). When that ships, the server returns the
- * ordered/attention rollup directly and this module becomes a thin adapter —
- * keep ALL derivation logic in this file so the swap stays single-file.
+ * The backend `monitoring-attention-v1` rollup is now LIVE: when the capability
+ * is advertised, the home screen prefers `attentionFromServer()` below, which
+ * maps the server's authoritative rollup into the SAME shape `deriveAttention()`
+ * returns. `deriveAttention()` (with its local-expiry fallback) remains the
+ * FALLBACK path whenever the flag is absent or the fetch fails — behaviour then
+ * is byte-identical to before the server path existed. Both mappings live in
+ * this one file so the screen consumes a single interface.
  */
 import type { ServerTargetStatus } from '../api/client';
+import type { ParsedAttention } from '../api/schemas';
 import type { CertWatch } from '../types';
 
 export type AttentionState = 'ok' | 'attention' | 'critical';
@@ -86,4 +90,46 @@ export function deriveAttention(
   const state: AttentionState =
     counts.critical > 0 ? 'critical' : counts.attention > 0 ? 'attention' : 'ok';
   return { state, counts, orderedWatches };
+}
+
+/**
+ * Maps the server-authored `monitoring-attention-v1` rollup into the same
+ * AttentionSummary shape as deriveAttention(). Rows arrive already
+ * attention-ordered; each is matched back to a local watch by serverTargetId,
+ * then domain, preserving server order for matched watches and appending the
+ * rest in their existing order. Counts come from matched rows so the bar always
+ * describes the visible list (a watch flagged only on another device can't
+ * inflate a count with no row to point at).
+ */
+export function attentionFromServer(
+  server: ParsedAttention,
+  watches: CertWatch[],
+): AttentionSummary {
+  const byServerId = new Map<string, CertWatch>();
+  const byHost = new Map<string, CertWatch>();
+  watches.forEach((w) => {
+    if (w.serverTargetId) byServerId.set(w.serverTargetId, w);
+    if (w.domain) byHost.set(w.domain.toLowerCase(), w);
+  });
+
+  const matched: CertWatch[] = [];
+  const seen = new Set<string>();
+  const counts: AttentionCounts = { ok: 0, attention: 0, critical: 0 };
+
+  server.attention.forEach((row) => {
+    const watch =
+      (row.targetId ? byServerId.get(row.targetId) : undefined) ??
+      (row.host ? byHost.get(row.host.toLowerCase()) : undefined);
+    if (!watch || seen.has(watch.id)) return;
+    seen.add(watch.id);
+    matched.push(watch);
+    if (row.severity === 'critical') counts.critical += 1;
+    else counts.attention += 1;
+  });
+
+  const rest = watches.filter((w) => !seen.has(w.id));
+  counts.ok = rest.length;
+  const state: AttentionState =
+    counts.critical > 0 ? 'critical' : counts.attention > 0 ? 'attention' : 'ok';
+  return { state, counts, orderedWatches: [...matched, ...rest] };
 }

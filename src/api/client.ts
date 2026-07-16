@@ -13,7 +13,13 @@ import * as Application from 'expo-application';
 import * as SecureStore from 'expo-secure-store';
 import * as Crypto from 'expo-crypto';
 import type { CertInfo, CertPolicy } from '../types';
-import { parseLiveCertResponse, parseMonitoringHealth, type ParsedMonitoringHealth } from './schemas';
+import {
+  parseLiveCertResponse,
+  parseMonitoringHealth,
+  parseMonitoringAttention,
+  type ParsedMonitoringHealth,
+  type ParsedAttention,
+} from './schemas';
 
 const BASE_URL = 'https://securl-app-production.up.railway.app';
 const OWNER_TOKEN_KEY = 'cw_scan_owner_token';        // SecureStore key (no ':')
@@ -467,6 +473,32 @@ export async function fetchMonitoringHealth(): Promise<ParsedMonitoringHealth | 
     });
     if (!res.ok) return null;
     return parseMonitoringHealth(await res.json());
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Fetch the backend's owner-scoped attention-first rollup
+ * (GET /api/monitoring-attention) — the ordered "needs attention" list plus
+ * summary counts/state the home screen previously derived on-device. Gated on
+ * the `monitoring-attention-v1` monitoring feature: when the flag is absent the
+ * app never calls and the caller falls back to the local derivation
+ * (src/lib/attention.ts). Returns null on any failure (ungated, offline,
+ * non-200, shape drift) so absence is byte-identical to the pre-adoption path.
+ */
+export async function fetchMonitoringAttention(limit = 100): Promise<ParsedAttention | null> {
+  try {
+    const features = await getMonitoringFeatures();
+    if (!features?.includes('monitoring-attention-v1')) return null;
+    const owner = await getOwnerToken();
+    const url = `${BASE_URL}/api/monitoring-attention?appId=${encodeURIComponent(APP_ID)}&limit=${limit}`;
+    const res = await fetch(url, {
+      headers: { ...CLIENT_HEADERS, 'X-Scan-Owner': owner },
+      signal: AbortSignal.timeout(15000),
+    });
+    if (!res.ok) return null;
+    return parseMonitoringAttention(await res.json());
   } catch {
     return null;
   }
