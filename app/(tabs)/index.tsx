@@ -213,6 +213,15 @@ export default function WatchesScreen() {
             <Text style={styles.emptyText}>
               Add a domain to start monitoring its TLS certificate expiry.
             </Text>
+            <TouchableOpacity
+              style={styles.emptyBtn}
+              onPress={() => { haptics.light(); router.push('/add'); }}
+              activeOpacity={0.85}
+              accessibilityLabel="Add your first domain to watch"
+            >
+              <Ionicons name="add" size={18} color={colors.textPrimary} />
+              <Text style={styles.emptyBtnText}>Add your first domain</Text>
+            </TouchableOpacity>
           </View>
         ) : (
           attention.orderedWatches.map((watch) => (
@@ -379,6 +388,17 @@ const styles = StyleSheet.create({
     gap: spacing.md,
   },
   emptyTitle: { color: colors.textPrimary, fontSize: typography.lg, fontWeight: '700' },
+  emptyBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: spacing.lg,
+    backgroundColor: colors.accent,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm + 2,
+    borderRadius: radius.full,
+  },
+  emptyBtnText: { color: colors.textPrimary, fontSize: typography.base, fontWeight: '700' },
   emptyText: {
     color: colors.textSecondary,
     fontSize: typography.base,
