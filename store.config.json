@@ -18,7 +18,7 @@
           "devops",
           "web"
         ],
-        "releaseNotes": "• More reliable certificate-expiry alerts and background checks\n• New: discover the rest of the SecURL suite from inside the app",
+        "releaseNotes": "• A richer certificate event timeline on each watch, with clear explanations of what changed and what to do next\n• Your watch list now leads with what needs attention first\n• Android devices now receive push alerts\n• Reliability improvements",
         "privacyPolicyUrl": "https://securl.online/privacy",
         "supportUrl": "https://securl.online/support"
       }
