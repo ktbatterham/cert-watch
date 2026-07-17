@@ -215,6 +215,72 @@ export async function fetchCertTargetHistory(targetId: string): Promise<CertHist
   }
 }
 
+// A normalised view of one backend monitoring-timeline event. Sourced from the
+// purpose-built GET /api/monitoring-targets/:id/timeline (capability
+// `monitoring-timeline-v1`), which supersedes the raw /history feed: every entry
+// is already a detected transition with a server-authored explanation.
+export interface TimelineEvent {
+  eventId: string;
+  type: string;
+  severity: string | null; // 'critical' | 'warning' | 'info' | null
+  occurredAt: string;
+  headline: string;
+  detail: string | null;
+  action: string | null;
+  verdict: string | null; // policy.verdict, e.g. 'drift' | 'pass'
+}
+
+/**
+ * Fetch the backend's server-authored monitoring timeline for a cert target,
+ * behind the `monitoring-timeline-v1` capability. Returns a normalised event
+ * list (newest first), [] when the target has no transitions, or **null** when
+ * the capability is absent or the request fails — callers treat null as "fall
+ * back to fetchCertTargetHistory". Never throws.
+ */
+export async function fetchMonitoringTimeline(targetId: string): Promise<TimelineEvent[] | null> {
+  try {
+    const features = await getMonitoringFeatures();
+    if (!features?.includes('monitoring-timeline-v1')) return null;
+    const owner = await getOwnerToken();
+    const res = await fetch(
+      `${BASE_URL}/api/monitoring-targets/${encodeURIComponent(targetId)}/timeline?limit=30&scanLimit=20`,
+      { headers: { ...CLIENT_HEADERS, 'X-Scan-Owner': owner }, signal: AbortSignal.timeout(15000) },
+    );
+    if (!res.ok) return null;
+    const data = (await res.json()) as { timeline?: unknown };
+    const rows = Array.isArray(data.timeline) ? data.timeline : [];
+    const events: TimelineEvent[] = [];
+    for (const row of rows) {
+      if (!row || typeof row !== 'object') continue;
+      const r = row as Record<string, unknown>;
+      const eventId = typeof r.eventId === 'string' ? r.eventId : null;
+      const occurredAt = typeof r.occurredAt === 'string' ? r.occurredAt : null;
+      const type = typeof r.type === 'string' ? r.type : null;
+      if (!eventId || !occurredAt || !type) continue; // skip malformed rows, don't fail the batch
+      const explanation = (r.explanation && typeof r.explanation === 'object'
+        ? (r.explanation as Record<string, unknown>)
+        : {}) as Record<string, unknown>;
+      const policy = (r.policy && typeof r.policy === 'object'
+        ? (r.policy as Record<string, unknown>)
+        : {}) as Record<string, unknown>;
+      const str = (v: unknown): string | null => (typeof v === 'string' && v.length > 0 ? v : null);
+      events.push({
+        eventId,
+        type,
+        severity: str(r.severity),
+        occurredAt,
+        headline: str(explanation.headline) ?? str(r.title) ?? type,
+        detail: str(explanation.detail) ?? str(r.body),
+        action: str(explanation.action),
+        verdict: str(policy.verdict),
+      });
+    }
+    return events.sort((a, b) => new Date(b.occurredAt).getTime() - new Date(a.occurredAt).getTime());
+  } catch {
+    return null;
+  }
+}
+
 // ── Capabilities + owner-scoped cert summary ─────────────────────────────────
 // The backend advertises additive features via GET /api/capabilities so clients
 // can discover endpoints instead of assuming them (CONSUMER-API-MAP guidance).

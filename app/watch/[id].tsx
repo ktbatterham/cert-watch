@@ -18,8 +18,10 @@ import { useChecker } from '../../src/hooks/useChecker';
 import { scheduleCertNotification } from '../../src/notifications';
 import {
   fetchCertTargetHistory,
+  fetchMonitoringTimeline,
   fetchCertTargetStatus,
   type CertHistoryEntry,
+  type TimelineEvent,
   type ServerMonitoringEvent,
 } from '../../src/api/client';
 import { haptics } from '../../src/haptics';
@@ -35,6 +37,7 @@ export default function WatchDetailScreen() {
   const [watch, setWatch] = useState<CertWatch | null>(null);
   const [events, setEvents] = useState<CertEvent[]>([]);
   const [serverHistory, setServerHistory] = useState<CertHistoryEntry[]>([]);
+  const [serverTimeline, setServerTimeline] = useState<TimelineEvent[] | null>(null);
   const [serverEvents, setServerEvents] = useState<ServerMonitoringEvent[]>([]);
   const [checking, setChecking] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -53,7 +56,15 @@ export default function WatchDetailScreen() {
     // gated on mobile-monitoring-explanations-v1, the fuller server-authored
     // explanation for the most recent check.
     if (w.serverTargetId) {
-      setServerHistory(await fetchCertTargetHistory(w.serverTargetId));
+      // Prefer the purpose-built monitoring-timeline-v1 feed; fall back to the
+      // raw /history feed when the capability is absent or the request fails.
+      const timeline = await fetchMonitoringTimeline(w.serverTargetId);
+      setServerTimeline(timeline);
+      if (timeline === null) {
+        setServerHistory(await fetchCertTargetHistory(w.serverTargetId));
+      } else {
+        setServerHistory([]);
+      }
       const statusMap = await fetchCertTargetStatus();
       setServerEvents(statusMap?.get(w.serverTargetId)?.events ?? []);
     }
@@ -224,7 +235,7 @@ export default function WatchDetailScreen() {
       {watch.serverTargetId && (
         <View>
           <Text style={styles.sectionLabel}>Monitoring timeline</Text>
-          <ServerTimeline entries={serverHistory} />
+          <ServerTimeline entries={serverHistory} events={serverTimeline} />
         </View>
       )}
 

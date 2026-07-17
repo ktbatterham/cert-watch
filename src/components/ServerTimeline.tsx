@@ -8,10 +8,14 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing, typography, radius } from '../theme';
-import type { CertHistoryEntry } from '../api/client';
+import type { CertHistoryEntry, TimelineEvent } from '../api/client';
 
 interface Props {
   entries: CertHistoryEntry[];
+  // When the `monitoring-timeline-v1` server timeline is available, callers pass
+  // its normalised events here and the component prefers them over the raw
+  // /history `entries`. Undefined → legacy /history rendering (unchanged).
+  events?: TimelineEvent[] | null;
 }
 
 type EventMeta = { icon: string; color: string; label: string };
@@ -33,9 +37,22 @@ function metaFor(eventType: string): EventMeta {
       return { icon: 'swap-horizontal-outline', color: colors.accentLight, label: 'Issuer changed' };
     case 'unreachable':
       return { icon: 'cloud-offline-outline', color: colors.textMuted, label: 'Unreachable' };
+    case 'first_seen':
+      return { icon: 'flag-outline', color: colors.accentLight, label: 'First seen' };
+    case 'drift':
+      return { icon: 'pulse-outline', color: colors.warning, label: 'Drift' };
     default:
       return { icon: 'ellipse-outline', color: colors.textMuted, label: eventType };
   }
+}
+
+// Timeline events carry their own severity; let it override the type's default
+// colour so a critical first_seen reads red, not neutral.
+function metaForEvent(type: string, severity: string | null): EventMeta {
+  const base = metaFor(type);
+  if (severity === 'critical') return { ...base, color: colors.critical };
+  if (severity === 'warning' && base.color !== colors.critical) return { ...base, color: colors.warning };
+  return base;
 }
 
 function formatDate(iso: string): string {
@@ -62,15 +79,20 @@ function detailFor(entry: CertHistoryEntry): string {
   return '';
 }
 
-export function ServerTimeline({ entries }: Props) {
+export function ServerTimeline({ entries, events }: Props) {
+  // Prefer the purpose-built server timeline (monitoring-timeline-v1) when the
+  // caller has it; otherwise fall back to the legacy /history rendering below.
+  if (events !== undefined && events !== null) {
+    return <ServerTimelineEvents events={events} />;
+  }
   // Only surface checks that detected something — routine "no change" pings would
   // bury the signal. The count of all checks is shown as a footer.
-  const events = entries.filter((e) => e.eventType);
+  const detectedEvents = entries.filter((e) => e.eventType);
   const lastCheck = entries[0]?.checkedAt;
 
   return (
     <SectionWrap>
-      {events.length === 0 ? (
+      {detectedEvents.length === 0 ? (
         <View style={styles.emptyRow}>
           <Ionicons name="shield-checkmark-outline" size={18} color={colors.safe} />
           <Text style={styles.emptyText}>
@@ -78,13 +100,13 @@ export function ServerTimeline({ entries }: Props) {
           </Text>
         </View>
       ) : (
-        events.map((entry, i) => {
+        detectedEvents.map((entry, i) => {
           const meta = metaFor(entry.eventType as string);
           const detail = detailFor(entry);
           return (
             <View
               key={`${entry.checkedAt}-${i}`}
-              style={[styles.row, i === events.length - 1 && styles.rowLast]}
+              style={[styles.row, i === detectedEvents.length - 1 && styles.rowLast]}
             >
               <View style={[styles.iconWrap, { backgroundColor: `${meta.color}15` }]}>
                 <Ionicons name={meta.icon as any} size={16} color={meta.color} />
@@ -103,6 +125,48 @@ export function ServerTimeline({ entries }: Props) {
       {lastCheck && (
         <Text style={styles.footer}>
           {entries.length} server check{entries.length === 1 ? '' : 's'} · last {formatDate(lastCheck)}
+        </Text>
+      )}
+    </SectionWrap>
+  );
+}
+
+// Rich path: monitoring-timeline-v1 events are already detected transitions, each
+// with a server-authored headline/detail/action — render them directly.
+function ServerTimelineEvents({ events }: { events: TimelineEvent[] }) {
+  return (
+    <SectionWrap>
+      {events.length === 0 ? (
+        <View style={styles.emptyRow}>
+          <Ionicons name="shield-checkmark-outline" size={18} color={colors.safe} />
+          <Text style={styles.emptyText}>
+            No changes detected since monitoring began. Checked daily by the server.
+          </Text>
+        </View>
+      ) : (
+        events.map((e, i) => {
+          const meta = metaForEvent(e.type, e.severity);
+          const secondary = e.detail ?? e.action;
+          return (
+            <View key={e.eventId} style={[styles.row, i === events.length - 1 && styles.rowLast]}>
+              <View style={[styles.iconWrap, { backgroundColor: `${meta.color}15` }]}>
+                <Ionicons name={meta.icon as any} size={16} color={meta.color} />
+              </View>
+              <View style={styles.body}>
+                <View style={styles.top}>
+                  <Text style={[styles.label, { color: meta.color }]}>{meta.label}</Text>
+                  <Text style={styles.time}>{formatDate(e.occurredAt)}</Text>
+                </View>
+                <Text style={styles.headline}>{e.headline}</Text>
+                {secondary ? <Text style={styles.detail}>{secondary}</Text> : null}
+              </View>
+            </View>
+          );
+        })
+      )}
+      {events.length > 0 && (
+        <Text style={styles.footer}>
+          {events.length} server event{events.length === 1 ? '' : 's'} · last {formatDate(events[0].occurredAt)}
         </Text>
       )}
     </SectionWrap>
@@ -148,6 +212,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   time: { color: colors.textMuted, fontSize: typography.xs },
+  headline: { color: colors.textPrimary, fontSize: typography.xs, fontWeight: '600' },
   detail: { color: colors.textSecondary, fontSize: typography.xs },
   emptyRow: {
     flexDirection: 'row',
