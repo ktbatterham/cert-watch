@@ -16,6 +16,7 @@ import { getMonitoringFeatures } from '../src/api/client';
 import { addEvent } from '../src/storage/events';
 import { scheduleCertNotification } from '../src/notifications';
 import { haptics } from '../src/haptics';
+import { maybePromptForReview } from '../src/lib/reviewPrompt';
 import type { CertWatch, CertInfo } from '../src/types';
 
 type Stage = 'input' | 'scanning' | 'confirm';
@@ -92,6 +93,9 @@ export default function AddScreen() {
       } else {
         haptics.success();
       }
+      // Genuine positive moment: a watch was saved. Fire-and-forget a possible
+      // ratings prompt (gated + silent) without blocking navigation.
+      void maybePromptForReview();
       router.back();
     } catch {
       haptics.error();
