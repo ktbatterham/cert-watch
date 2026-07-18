@@ -1,36 +1,64 @@
 /**
- * EcosystemCard — shown at the bottom of the confirm screen after adding a watch.
- * Cross-promotes Header Watch and securl.online without being intrusive.
+ * EcosystemCard — cross-promotes the other two apps in the SecURL suite
+ * (SecURL and Header Watch). Rendered on the home screen and on the
+ * add-watch confirm screen. Platform-aware links: App Store on iOS,
+ * securl.online/downloads on Android.
  */
 
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Linking } from 'react-native';
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  StyleSheet,
+  Linking,
+  Image,
+  Platform,
+  type ImageSourcePropType,
+} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing, radius, typography } from '../theme';
 
-const HEADER_WATCH_URL = 'https://apps.apple.com/us/app/header-watch/id6774599437';
-const SECURL_URL = 'https://securl.online';
-
-interface LinkRowProps {
-  icon: React.ComponentProps<typeof Ionicons>['name'];
-  label: string;
-  sublabel: string;
-  url: string;
+interface SuiteApp {
+  icon: ImageSourcePropType;
+  name: string;
+  tagline: string;
+  iosUrl: string;
 }
 
-function LinkRow({ icon, label, sublabel, url }: LinkRowProps) {
+const APPS: SuiteApp[] = [
+  {
+    icon: require('../../assets/suite/securl.png'),
+    name: 'SecURL',
+    tagline: 'A to F security posture grade for any URL',
+    iosUrl: 'https://apps.apple.com/us/app/securl/id6774322464',
+  },
+  {
+    icon: require('../../assets/suite/header-watch.png'),
+    name: 'Header Watch',
+    tagline: 'Monitor HTTP security header drift',
+    iosUrl: 'https://apps.apple.com/us/app/header-watch/id6774599437',
+  },
+];
+
+const ANDROID_URL = 'https://securl.online/downloads';
+
+function AppRow({ app }: { app: SuiteApp }) {
+  const url = Platform.OS === 'android' ? ANDROID_URL : app.iosUrl;
   return (
     <TouchableOpacity
-      style={styles.linkRow}
+      style={styles.row}
       onPress={() => Linking.openURL(url)}
       activeOpacity={0.7}
+      accessibilityRole="link"
+      accessibilityLabel={`${app.name} — ${app.tagline}`}
     >
-      <Ionicons name={icon} size={18} color={colors.accentLight} />
-      <View style={styles.linkText}>
-        <Text style={styles.linkLabel}>{label}</Text>
-        <Text style={styles.linkSublabel}>{sublabel}</Text>
+      <Image source={app.icon} style={styles.icon} />
+      <View style={styles.rowText}>
+        <Text style={styles.appName}>{app.name}</Text>
+        <Text style={styles.tagline}>{app.tagline}</Text>
       </View>
-      <Ionicons name="open-outline" size={13} color={colors.textMuted} />
+      <Ionicons name="open-outline" size={16} color={colors.textMuted} />
     </TouchableOpacity>
   );
 }
@@ -38,20 +66,13 @@ function LinkRow({ icon, label, sublabel, url }: LinkRowProps) {
 export function EcosystemCard() {
   return (
     <View style={styles.card}>
-      <Text style={styles.heading}>Also in the SecURL suite</Text>
-      <LinkRow
-        icon="eye-outline"
-        label="Header Watch"
-        sublabel="Monitor security header drift"
-        url={HEADER_WATCH_URL}
-      />
-      <View style={styles.divider} />
-      <LinkRow
-        icon="shield-checkmark-outline"
-        label="securl.online"
-        sublabel="Full posture scan: headers, TLS, DNS, third-party"
-        url={SECURL_URL}
-      />
+      <Text style={styles.heading}>More from the SecURL suite</Text>
+      {APPS.map((app, i) => (
+        <React.Fragment key={app.name}>
+          {i > 0 && <View style={styles.divider} />}
+          <AppRow app={app} />
+        </React.Fragment>
+      ))}
     </View>
   );
 }
@@ -67,29 +88,32 @@ const styles = StyleSheet.create({
     marginTop: spacing.md,
   },
   heading: {
-    color: colors.textMuted,
-    fontSize: typography.xs,
-    fontWeight: '600',
-    textTransform: 'uppercase',
-    letterSpacing: 0.8,
+    color: colors.textSecondary,
+    fontSize: typography.sm,
+    fontWeight: '700',
     marginBottom: 2,
   },
-  linkRow: {
+  row: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
     paddingVertical: 4,
   },
-  linkText: {
+  icon: {
+    width: 38,
+    height: 38,
+    borderRadius: radius.md,
+  },
+  rowText: {
     flex: 1,
     gap: 2,
   },
-  linkLabel: {
+  appName: {
     color: colors.textPrimary,
-    fontSize: typography.sm,
-    fontWeight: '600',
+    fontSize: typography.base,
+    fontWeight: '700',
   },
-  linkSublabel: {
+  tagline: {
     color: colors.textSecondary,
     fontSize: typography.xs,
     lineHeight: 16,

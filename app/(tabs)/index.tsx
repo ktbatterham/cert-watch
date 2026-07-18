@@ -7,6 +7,7 @@ import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing, typography, radius } from '../../src/theme';
 import { ExpiryBadge } from '../../src/components/ExpiryBadge';
+import { EcosystemCard } from '../../src/components/EcosystemCard';
 import { useWatches } from '../../src/hooks/useWatches';
 import {
   sendTestNotification,
@@ -233,6 +234,12 @@ export default function WatchesScreen() {
             />
           ))
         )}
+
+        {/* Suite cross-promotion — pinned at the bottom of scroll content so it
+            shows in both the empty state and below the watch list. */}
+        <View style={styles.ecosystemWrap}>
+          <EcosystemCard />
+        </View>
       </ScrollView>
 
       {monitoringHealth && watches.length > 0 && (
@@ -379,6 +386,10 @@ const styles = StyleSheet.create({
   attentionDotCritical: { backgroundColor: colors.critical },
   attentionText: { color: colors.warning, fontSize: typography.sm, fontWeight: '600' },
   list: { flex: 1 },
+  ecosystemWrap: {
+    paddingHorizontal: spacing.md,
+    paddingBottom: spacing.md,
+  },
   emptyContainer: { flexGrow: 1 },
   empty: {
     flex: 1,
