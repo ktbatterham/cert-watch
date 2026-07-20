@@ -23,6 +23,27 @@ export function normalizeSerial(serial: string | null): string | null {
   return hex || serial;
 }
 
+// Large/CDN/multi-leaf hosts (e.g. github.com) legitimately serve several
+// concurrently-valid leaf certificates with different serials — a serial-only
+// comparison fires a false "renewed" event on every leaf flip even though the
+// certificate hasn't actually been reissued (backend request #11). Mirrors the
+// backend's certificateValidityMovedForward()/movedForward() guard in
+// server/certMonitoring.mjs: only treat a serial change as a genuine renewal
+// when the expiry has made a real forward move. The backend also checks
+// validFrom, but the on-device checker never has that available — both the
+// live-cert endpoint and crt.sh only surface not-after (see
+// src/api/schemas.ts / fetchCertInfoFromCrtSh) — so this checks validTo only.
+// Keeping the semantics aligned means on-device and server-side classification
+// can't contradict each other for the same certificate.
+export function certValidityMovedForward(
+  prevExpiry: string | null,
+  nextExpiry: string,
+): boolean {
+  const prevTime = prevExpiry ? new Date(prevExpiry).getTime() : NaN;
+  const nextTime = new Date(nextExpiry).getTime();
+  return Number.isFinite(prevTime) && Number.isFinite(nextTime) && nextTime > prevTime;
+}
+
 // Authoritative served cert via the SecURL backend, falling back to crt.sh's CT
 // logs when the backend is unavailable.
 export async function fetchCertInfo(domain: string): Promise<CertInfo> {
@@ -152,8 +173,14 @@ export async function checkCert(watch: CertWatch): Promise<CertEvent | null> {
 
   let event: CertEvent | null = null;
 
-  // Certificate renewed or replaced
-  if (watch.certSerial && normalizeSerial(watch.certSerial) !== normalizeSerial(certInfo.serial)) {
+  // Certificate renewed or replaced — serial change alone isn't enough (see
+  // certValidityMovedForward above); require a genuine forward move in expiry
+  // too, or a multi-leaf host's routine serial flip reads as a false renewal.
+  if (
+    watch.certSerial &&
+    normalizeSerial(watch.certSerial) !== normalizeSerial(certInfo.serial) &&
+    certValidityMovedForward(watch.certExpiry, certInfo.expiry)
+  ) {
     const eventType = certInfo.daysUntilExpiry <= 0 ? 'expired' : 'renewed';
     event = {
       id: `${Date.now()}-${watch.id}`,
