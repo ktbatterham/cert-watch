@@ -212,6 +212,8 @@ export default function WatchDetailScreen() {
           onPress={handleCheckNow}
           disabled={checking}
           activeOpacity={0.8}
+          accessibilityLabel={checking ? 'Checking certificate now' : `Check ${watch.domain}'s certificate now`}
+          accessibilityRole="button"
         >
           {checking ? (
             <ActivityIndicator size="small" color={colors.textPrimary} />
@@ -330,7 +332,13 @@ export default function WatchDetailScreen() {
       </View>
 
       {/* Delete */}
-      <TouchableOpacity style={styles.deleteBtn} onPress={handleDelete} activeOpacity={0.8}>
+      <TouchableOpacity
+        style={styles.deleteBtn}
+        onPress={handleDelete}
+        activeOpacity={0.8}
+        accessibilityLabel={`Remove ${watch.domain} from your watch list`}
+        accessibilityRole="button"
+      >
         <Ionicons name="trash-outline" size={16} color={colors.critical} />
         <Text style={styles.deleteBtnText}>Remove watch</Text>
       </TouchableOpacity>

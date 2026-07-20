@@ -279,9 +279,21 @@ function WatchRow({
   // otherwise fall back to the local issuer/checked-at line.
   const needsAttention = serverStatus?.state === 'needs_attention';
   const serverChange = serverStatus?.changeTitle ?? null;
+  const daysLeft = watch.daysUntilExpiry;
+  const daysLabel = daysLeft === null
+    ? 'not yet checked'
+    : daysLeft <= 0
+      ? 'expired'
+      : `${daysLeft} day${daysLeft === 1 ? '' : 's'} remaining`;
 
   return (
-    <TouchableOpacity style={styles.row} onPress={onPress} activeOpacity={0.75}>
+    <TouchableOpacity
+      style={styles.row}
+      onPress={onPress}
+      activeOpacity={0.75}
+      accessibilityLabel={`${watch.domain}, ${daysLabel}, tap for details`}
+      accessibilityRole="button"
+    >
       <View style={styles.rowLeft}>
         <View style={styles.rowMeta}>
           <Text style={styles.rowDomain}>{watch.domain}</Text>
