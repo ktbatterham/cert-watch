@@ -26,3 +26,11 @@ export async function openScanHandoff(target: string): Promise<void> {
     // Non-fatal.
   }
 }
+
+// Same URL shape as scanHandoffUrl, but for links a user shares with someone
+// else (native share sheet) rather than the self-scan CTA — a distinct
+// utm_campaign keeps the two attributable separately in web analytics.
+export function shareHandoffUrl(target: string): string {
+  return `${WEB_BASE}/?url=${encodeURIComponent(normalize(target))}` +
+    `&utm_source=${SOURCE}&utm_medium=app&utm_campaign=mobile_shared_watch`;
+}

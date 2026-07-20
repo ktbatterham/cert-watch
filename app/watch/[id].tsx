@@ -1,9 +1,9 @@
 import React, { useState, useCallback } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity,
-  StyleSheet, ActivityIndicator, Alert, RefreshControl,
+  StyleSheet, ActivityIndicator, Alert, RefreshControl, Share,
 } from 'react-native';
-import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
+import { Stack, useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing, typography, radius, expiryColor } from '../../src/theme';
 import { ExpiryBadge } from '../../src/components/ExpiryBadge';
@@ -25,7 +25,7 @@ import {
   type ServerMonitoringEvent,
 } from '../../src/api/client';
 import { haptics } from '../../src/haptics';
-import { openScanHandoff } from '../../src/lib/webHandoff';
+import { openScanHandoff, shareHandoffUrl } from '../../src/lib/webHandoff';
 import type { CertWatch, CertEvent } from '../../src/types';
 
 export default function WatchDetailScreen() {
@@ -129,7 +129,48 @@ export default function WatchDetailScreen() {
   const expiryMs = watch.certExpiry ? new Date(watch.certExpiry).getTime() - Date.now() : null;
   const daysLeft = expiryMs !== null ? Math.ceil(expiryMs / 86_400_000) : null;
 
+  // Separate from the self-scan handoff above: opens the native share sheet so
+  // the user can send this watch's status to someone else, rather than opening
+  // their own browser. Logs (dev-only console, no domain to Sentry) whether the
+  // share actually completed vs. was dismissed, so this isn't a black box.
+  const handleShare = async () => {
+    haptics.light();
+    const url = shareHandoffUrl(watch.domain);
+    const message = daysLeft !== null
+      ? `${watch.domain}'s TLS cert expires in ${daysLeft} day${daysLeft === 1 ? '' : 's'} — I'm watching it with Cert Watch. Full security posture: ${url}`
+      : `I'm watching ${watch.domain}'s TLS cert with Cert Watch. Full security posture: ${url}`;
+    try {
+      const result = await Share.share({ message });
+      if (__DEV__) {
+        const outcome = result.action === Share.dismissedAction ? 'dismissed' : 'completed';
+        // eslint-disable-next-line no-console
+        console.log(`[share] watch status share ${outcome}${result.activityType ? ` via ${result.activityType}` : ''}`);
+      }
+    } catch (e) {
+      if (__DEV__) {
+        // eslint-disable-next-line no-console
+        console.warn('[share] watch status share failed', e);
+      }
+    }
+  };
+
   return (
+    <>
+    <Stack.Screen
+      options={{
+        headerRight: () => (
+          <TouchableOpacity
+            onPress={handleShare}
+            activeOpacity={0.7}
+            style={styles.headerShareBtn}
+            accessibilityLabel={`Share ${watch.domain}'s certificate status`}
+            accessibilityRole="button"
+          >
+            <Ionicons name="share-outline" size={22} color={colors.accentLight} />
+          </TouchableOpacity>
+        ),
+      }}
+    />
     <ScrollView
       style={styles.screen}
       contentContainerStyle={styles.content}
@@ -295,6 +336,7 @@ export default function WatchDetailScreen() {
       </TouchableOpacity>
 
     </ScrollView>
+    </>
   );
 }
 
@@ -397,4 +439,5 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
   },
   webHandoffText: { color: colors.accentLight, fontSize: typography.sm, fontWeight: '600' },
+  headerShareBtn: { paddingHorizontal: spacing.sm, paddingVertical: spacing.xs },
 });
