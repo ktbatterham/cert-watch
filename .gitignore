@@ -39,3 +39,8 @@ yarn-error.*
 # generated native folders
 /ios
 /android
+
+# Firebase client config — real API key, kept out of git history (see
+# google-services.json.example); EAS Build injects it via the project's
+# GOOGLE_SERVICES_JSON file secret, see app.config.js.
+google-services.json
