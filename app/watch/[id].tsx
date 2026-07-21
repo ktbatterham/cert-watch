@@ -227,15 +227,27 @@ export default function WatchDetailScreen() {
       </SectionCard>
 
       {/* Mobile → web handoff: Cert Watch covers the certificate; the web app runs
-          a full posture scan of the whole site (contract MOBILE-WEB-GROWTH). */}
+          a full posture scan of the whole site (contract MOBILE-WEB-GROWTH).
+          Copy matches the contract's per-context wording exactly: the default
+          "Check full site posture" for a healthy cert, and the more direct
+          "Open full SecURL scan" once the cert is expiring or already expired
+          — the highest-intent moment to push someone to the full scan. The
+          30-day threshold matches this app's own expiryColor() warning band
+          and the push-notification EXPIRY_WARN_DAYS bands, not a new number. */}
       <TouchableOpacity
         style={styles.webHandoffBtn}
         onPress={() => { haptics.light(); openScanHandoff(watch.domain); }}
         activeOpacity={0.8}
-        accessibilityLabel="Check the full site posture on the web"
+        accessibilityLabel={
+          daysLeft !== null && daysLeft <= 30
+            ? 'Open a full SecURL scan on the web'
+            : 'Check the full site posture on the web'
+        }
       >
         <Ionicons name="open-outline" size={16} color={colors.accentLight} />
-        <Text style={styles.webHandoffText}>Check full site posture</Text>
+        <Text style={styles.webHandoffText}>
+          {daysLeft !== null && daysLeft <= 30 ? 'Open full SecURL scan' : 'Check full site posture'}
+        </Text>
       </TouchableOpacity>
 
       {/* Certificate details */}
