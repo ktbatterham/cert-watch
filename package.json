@@ -37,5 +37,9 @@
     "ios": "expo run:ios",
     "web": "expo start --web"
   },
-  "private": true
+  "private": true,
+  "overrides": {
+    "brace-expansion": "^5.0.7",
+    "shell-quote": "^1.10.0"
+  }
 }
