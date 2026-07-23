@@ -18,7 +18,7 @@
           "devops",
           "web"
         ],
-        "releaseNotes": "• A richer certificate event timeline on each watch, with clear explanations of what changed and what to do next\n• Your watch list now leads with what needs attention first\n• Reliability improvements",
+        "releaseNotes": "• Fixed: a certificate is no longer reported as renewed when only the served certificate rotated. A renewal now requires a genuine change to the expiry date\n• New: share a certificate's status straight from the watch screen\n• Clearer next-step wording when a certificate needs urgent attention\n• Accessibility improvements and reliability fixes",
         "privacyPolicyUrl": "https://securl.online/privacy",
         "supportUrl": "https://securl.online/support"
       }
