@@ -3,7 +3,7 @@ import {
   View, Text, TextInput, TouchableOpacity,
   StyleSheet, ActivityIndicator, ScrollView, Alert,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing, typography, radius } from '../src/theme';
 import { ExpiryBadge } from '../src/components/ExpiryBadge';
@@ -29,7 +29,13 @@ export default function AddScreen() {
   const router = useRouter();
   const { add } = useWatches();
 
-  const [domain, setDomain] = useState('');
+  // Deep-link pre-fill, e.g. `certwatch://add?domain=example.com` from the QR a CLI
+  // scan prints. Pre-fill only: the value is untrusted inbound input, so adding the
+  // watch stays an explicit user tap rather than something a link can do silently.
+  const { domain: domainParam } = useLocalSearchParams<{ domain?: string }>();
+  const [domain, setDomain] = useState(
+    typeof domainParam === 'string' ? sanitiseDomain(domainParam).slice(0, 253) : '',
+  );
   const [stage, setStage] = useState<Stage>('input');
   const [certInfo, setCertInfo] = useState<CertInfo | null>(null);
 
