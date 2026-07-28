@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity,
   StyleSheet, ActivityIndicator, ScrollView, Alert,
@@ -36,6 +36,14 @@ export default function AddScreen() {
   const [domain, setDomain] = useState(
     typeof domainParam === 'string' ? sanitiseDomain(domainParam).slice(0, 253) : '',
   );
+  // A deep link often arrives while this screen is already mounted (the app was
+  // backgrounded, not cold-started), and useState's initial value only applies on
+  // first mount — so re-apply whenever the param changes or the pre-fill is missed.
+  useEffect(() => {
+    if (typeof domainParam === 'string' && domainParam.trim()) {
+      setDomain(sanitiseDomain(domainParam).slice(0, 253));
+    }
+  }, [domainParam]);
   const [stage, setStage] = useState<Stage>('input');
   const [certInfo, setCertInfo] = useState<CertInfo | null>(null);
 
