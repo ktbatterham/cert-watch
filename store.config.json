@@ -18,7 +18,7 @@
           "devops",
           "web"
         ],
-        "releaseNotes": "• Fixed: a certificate is no longer reported as renewed when only the served certificate rotated. A renewal now requires a genuine change to the expiry date\n• New: share a certificate's status straight from the watch screen\n• Clearer next-step wording when a certificate needs urgent attention\n• Accessibility improvements and reliability fixes",
+        "releaseNotes": "• Fixed: opening a link or QR code from the SecURL command line tool now reliably pre-fills the target when the app is already running\n• Minor reliability improvements",
         "privacyPolicyUrl": "https://securl.online/privacy",
         "supportUrl": "https://securl.online/support"
       }
