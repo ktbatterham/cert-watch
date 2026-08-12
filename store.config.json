@@ -18,7 +18,7 @@
           "devops",
           "web"
         ],
-        "releaseNotes": "• Fixed: opening a link or QR code from the SecURL command line tool now reliably pre-fills the target when the app is already running\n• Minor reliability improvements",
+        "releaseNotes": "Refreshed the App Store screenshots to show the current app, plus minor under-the-hood updates.",
         "privacyPolicyUrl": "https://securl.online/privacy",
         "supportUrl": "https://securl.online/support"
       }
