@@ -1,0 +1,30 @@
+name: CI
+
+# Added 2026-09-12 alongside the same gate on securl-companion, where two
+# defects reached the App Store as plain TypeScript errors sitting on main
+# with nothing to catch them. This repo typechecks clean today; this keeps it
+# that way. Cert Watch has a real recurring user with live monitored targets,
+# so a silent regression here has an actual audience.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  typecheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
