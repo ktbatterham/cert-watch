@@ -1,5 +1,5 @@
-import { Stack, useRouter } from 'expo-router';
-import { useEffect } from 'react';
+import { Stack, useRouter, usePathname, useRootNavigationState } from 'expo-router';
+import { useCallback, useEffect, useState } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { View } from 'react-native';
 import * as Notifications from 'expo-notifications';
@@ -9,7 +9,7 @@ import { requestNotificationPermissions } from '../src/notifications';
 import { registerForRemotePush } from '../src/notifications/push';
 import { registerBackgroundFetch } from '../src/tasks/background';
 import { useOnboarding } from '../src/onboarding/useOnboarding';
-import { Onboarding } from '../src/components/Onboarding';
+import { Onboarding, type OnboardingExit } from '../src/components/Onboarding';
 import { loadWatches } from '../src/storage/watches';
 import { colors } from '../src/theme';
 
@@ -25,7 +25,31 @@ Sentry.init({
 
 function RootLayout() {
   const router = useRouter();
+  const pathname = usePathname();
+  const rootNavState = useRootNavigationState();
   const { seen, dismiss } = useOnboarding();
+
+  // "Get started" on the last onboarding slide lands the user on Add (their
+  // first watch) instead of an empty home list; Skip keeps the home landing.
+  // The Stack only mounts once `seen` flips true, so we can't navigate inside
+  // onDone. Instead record the intent and push in an effect after the Stack
+  // has rendered. The flag is cleared before navigating, so it fires once.
+  const [pendingAddAfterOnboarding, setPendingAddAfterOnboarding] = useState(false);
+  const finishOnboarding = useCallback(
+    (exit: OnboardingExit) => {
+      if (exit === 'start') setPendingAddAfterOnboarding(true);
+      dismiss();
+    },
+    [dismiss],
+  );
+  useEffect(() => {
+    if (!pendingAddAfterOnboarding || seen !== true || !rootNavState?.key) return;
+    setPendingAddAfterOnboarding(false);
+    // A first launch from a deep link (certwatch://add?domain=...) is already
+    // on Add with its pre-fill; pushing again would stack a blank copy on top.
+    if (pathname === '/add') return;
+    router.push('/add');
+  }, [pendingAddAfterOnboarding, seen, rootNavState?.key, pathname, router]);
 
   // Ask for notification permission + register background/push only AFTER
   // onboarding — don't prompt before the app has explained what it does.
@@ -88,7 +112,7 @@ function RootLayout() {
     return (
       <>
         <StatusBar style="light" />
-        <Onboarding onDone={dismiss} />
+        <Onboarding onDone={finishOnboarding} />
       </>
     );
   }

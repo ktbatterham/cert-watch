@@ -42,7 +42,13 @@ const SLIDES: Slide[] = [
   },
 ];
 
-export function Onboarding({ onDone }: { onDone: () => void }) {
+/**
+ * How onboarding ended: 'start' = "Get started" on the last slide (the user
+ * wants to begin, so the app lands them on Add); 'skip' = Skip (lands on home).
+ */
+export type OnboardingExit = 'start' | 'skip';
+
+export function Onboarding({ onDone }: { onDone: (exit: OnboardingExit) => void }) {
   const { width } = useWindowDimensions();
   const scroller = useRef<ScrollView>(null);
   const [page, setPage] = useState(0);
@@ -54,7 +60,7 @@ export function Onboarding({ onDone }: { onDone: () => void }) {
 
   const next = () => {
     if (last) {
-      onDone();
+      onDone('start');
       return;
     }
     scroller.current?.scrollTo({ x: (page + 1) * width, animated: true });
@@ -63,7 +69,7 @@ export function Onboarding({ onDone }: { onDone: () => void }) {
   return (
     <SafeAreaView style={styles.safe}>
       <View style={styles.top}>
-        <TouchableOpacity onPress={onDone} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
+        <TouchableOpacity onPress={() => onDone('skip')} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
           <Text style={styles.skip}>Skip</Text>
         </TouchableOpacity>
       </View>
