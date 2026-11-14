@@ -141,6 +141,10 @@ export default function AddScreen() {
         autoCapitalize="none"
         autoCorrect={false}
         keyboardType="url"
+        // Keyboard up on arrival: this screen has one job (type a domain).
+        // Mount-only, so it doesn't fight the scanning/confirm stages, and a
+        // deep-link pre-fill just arrives with the cursor in the field.
+        autoFocus
         editable={stage === 'input'}
       />
 
